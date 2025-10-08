@@ -1,0 +1,33 @@
+{
+  "name": "api-dashboards",
+  "version": "1.0.0",
+  "description": "",
+   "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "author": "Jaderson Sousa",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
+    "@types/dotenv": "^8.2.3",
+    "@types/express": "^5.0.3",
+    "@types/helmet": "^4.0.0",
+    "@types/node": "^24.7.0",
+    "@types/node-cache": "^4.2.5",
+    "mysql2": "^3.15.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "node-cache": "^5.1.2"
+  }
+}
