@@ -18,6 +18,89 @@ interface CertificateRow extends RowDataPacket {
   company_id: number;
 }
 
+interface PaginationParams {
+  page: number;
+  limit: number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
+interface ReportRow extends RowDataPacket {
+  item_name: string;
+  certificate_type: string;
+  certificate_description: string;
+  category_name: string;
+  certificate_status_name: string;
+  validity_status: string;
+  issuer_company_name: string;
+  Home_Area_city: string;
+  Home_Area_State: string;
+  Home_site_name: string;
+  
+  // Campos analíticos adicionados
+  days_until_expiration: number;
+  expiration_date: Date;
+  renewal_urgency_level: string;
+  combined_risk_score: number;
+  compliance_score: number;
+  operational_impact_score: number;
+  
+  // Campos de recomendação IA
+  ai_recommendation: string;
+  recommended_action: string;
+  action_priority: number;
+  needs_immediate_action: boolean;
+  
+  // Campos de certificação
+  recertification_probability: number;
+  renewal_probability_score: number;
+  expiration_risk_score: number;
+  
+  // Campos de custo e valor
+  asset_value_at_risk: number;
+  financial_risk_value: number;
+  purchase_cost: number;
+  purchase_currency: string;
+  
+  // Campos de automação e padrões
+  automation_candidate: boolean;
+  automation_readiness_score: number;
+  pattern_confidence_score: number;
+  
+  // Campos de tendência
+  trend_direction: string;
+  risk_trend: string;
+  
+  // Informações do item
+  item_code: string;
+  brand: string;
+  model: string;
+  serial: string;
+  
+  // Responsável
+  custody_name: string;
+  custody_email: string;
+  
+  // Flags úteis
+  is_expiring_this_week: boolean;
+  is_expiring_90_days: boolean;
+  is_expired: boolean;
+  is_high_value_asset: boolean;
+  is_critical_compliance: boolean;
+}
+
 export const getCertificateAnalyticsByCompany = async (companyId: number) => {
   const [rows] = await pool.query<CertificateRow[]>(`
     SELECT 
@@ -389,6 +472,152 @@ const calendarEvents = data.map((cert, index) => {
       daysToExpirationRanges,
       renewalTrend,
       calendarEvents 
+    }
+  };
+};
+
+export const getReportsCertificateAnalyticsByCompany = async (
+  companyId: number,
+  params: PaginationParams
+): Promise<PaginatedResponse<ReportRow>> => {
+  const { page = 1, limit = 10, sortBy = 'action_priority', sortOrder = 'DESC' } = params;
+
+  
+  
+  // Validar parâmetros
+  const validatedPage = Math.max(1, page);
+  const validatedLimit = Math.min(Math.max(1, limit), 999999); // Aumentar de 100 para 999999
+  const offset = (validatedPage - 1) * validatedLimit;
+
+  // Validar campo de ordenação para prevenir SQL injection
+  const allowedSortFields = [
+    'action_priority',
+    'days_until_expiration',
+    'combined_risk_score',
+    'expiration_date',
+    'item_name',
+    'certificate_type',
+    'renewal_urgency_level'
+  ];
+  
+  const validatedSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'action_priority';
+  const validatedSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+
+  // Query para contar total de registros
+  const [countResult] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) as total
+    FROM mat_view_prod.predictive_certificate_analysis
+    WHERE company_id = ?`,
+    [companyId]
+  );
+
+  const totalItems = countResult[0]?.total || 0;
+  const totalPages = Math.ceil(totalItems / validatedLimit);
+
+  // Query principal com paginação
+  const [rows] = await pool.query<ReportRow[]>(
+    `SELECT
+      -- Identificação básica
+      item_name,
+      item_code,
+      certificate_type,
+      certificate_description,
+      category_name,
+      certificate_status_name,
+      
+      -- Localização
+      Home_Area_city,
+      Home_Area_State,
+      Home_site_name,
+      
+      -- Status e validade
+      validity_status,
+      days_until_expiration,
+      expiration_date,
+      issue_date,
+      
+      -- Níveis de urgência e risco
+      renewal_urgency_level,
+      combined_risk_score,
+      compliance_score,
+      operational_impact_score,
+      expiration_risk_score,
+      
+      -- Recomendações IA
+      ai_recommendation,
+      recommended_action,
+      action_priority,
+      needs_immediate_action,
+      
+      -- Probabilidades e scores
+      recertification_probability,
+      renewal_probability_score,
+      automation_readiness_score,
+      pattern_confidence_score,
+      
+      -- Financeiro e valor
+      asset_value_at_risk,
+      financial_risk_value,
+      purchase_cost,
+      purchase_currency,
+      
+      -- Emissor
+      issuer_company_name,
+      issuer_reliability_score,
+      
+      -- Automação
+      automation_candidate,
+      
+      -- Tendências
+      trend_direction,
+      risk_trend,
+      
+      -- Detalhes do ativo
+      brand,
+      model,
+      serial,
+      
+      -- Responsável
+      custody_name,
+      custody_email,
+      department_name,
+      cost_center_name,
+      
+      -- Flags importantes
+      is_expiring_this_week,
+      is_expiring_90_days,
+      is_expired,
+      is_high_value_asset,
+      is_critical_compliance,
+      in_optimal_renewal_window,
+      
+      -- Workload e recursos
+      concurrent_renewals_same_period,
+      department_workload_index,
+      resource_availability_score,
+      
+      -- Data recomendada
+      recommended_start_date,
+      days_until_recommended_start
+      
+    FROM
+      mat_view_prod.predictive_certificate_analysis
+    WHERE
+      company_id = ?
+    ORDER BY ${validatedSortBy} ${validatedSortOrder}
+    LIMIT ? OFFSET ?`,
+    [companyId, validatedLimit, offset]
+  );
+
+  return {
+    data: rows,
+    pagination: {
+      currentPage: validatedPage,
+      totalPages,
+      totalItems,
+      itemsPerPage: validatedLimit,
+      hasNextPage: validatedPage < totalPages,
+      hasPreviousPage: validatedPage > 1
     }
   };
 };
