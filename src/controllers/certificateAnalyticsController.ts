@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { getCertificateAnalyticsByCompany, getReportsCertificateAnalyticsByCompany } from '../services/certificateAnalyticsService';
 
+// Controlador para buscar análises de certificados por empresa com tratamento de erros
 export const fetchCertificateAnalytics = async (req: Request, res: Response) => {
   try {
     const companyId = parseInt(req.params.companyId);
@@ -26,8 +27,7 @@ export const fetchCertificateAnalytics = async (req: Request, res: Response) => 
   }
 };
 
-
-
+// Controlador para relatórios com paginação, ordenação e tratamento de erros
 export const reportsCertificateAnalytics = async (req: Request, res: Response) => {
   try {
     const companyId = parseInt(req.params.companyId);
@@ -78,3 +78,4 @@ export const reportsCertificateAnalytics = async (req: Request, res: Response) =
     });
   }
 };
+
