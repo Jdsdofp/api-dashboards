@@ -6,6 +6,7 @@ import router from './routes/dashboard';
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // 🆕 PARA QUERY PARAMETERS
 
 app.use('/api/dashboard', router);
 
