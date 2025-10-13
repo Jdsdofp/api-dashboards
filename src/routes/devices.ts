@@ -87,4 +87,7 @@ router.get('/heartbeats/raw', deviceController.getRawHeartbeats);
 // Rota para scanned beacons
 router.get('/scanned-beacons/raw', deviceController.getRawScannedBeacons);
 
+// 🆕 Nova rota para GPS Route
+router.get('/gps-route/raw', deviceController.getRawGPSRoute);
+
 export default router;

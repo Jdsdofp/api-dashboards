@@ -627,3 +627,43 @@ export const getRawScannedBeacons = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getRawGPSRoute = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const sortBy = req.query.sortBy as string;
+    const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC';
+    
+    const filters: Record<string, any> = {};
+    
+    // Filtros específicos
+    if (req.query.dev_eui) filters.dev_eui = req.query.dev_eui;
+    if (req.query.customer_name) filters.customer_name = req.query.customer_name;
+    if (req.query.start_date) filters.start_date = req.query.start_date;
+    if (req.query.end_date) filters.end_date = req.query.end_date;
+    if (req.query.valid_gps_only) filters.valid_gps_only = req.query.valid_gps_only;
+    if (req.query.max_accuracy) filters.max_accuracy = req.query.max_accuracy;
+    
+    // Filtro genérico de colunas
+    if (req.query.column_filters) filters.column_filters = req.query.column_filters;
+    
+    console.log('🔍 GPS Route Controller - filters:', filters);
+    
+    const data = await deviceService.getGPSRouteManagementRaw({ 
+      page, 
+      limit, 
+      sortBy, 
+      sortOrder, 
+      filters 
+    });
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching GPS route:', error);
+    res.status(500).json({
+      error: 'Failed to fetch GPS route',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};

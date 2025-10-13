@@ -1336,6 +1336,120 @@ export const getScannedBeaconsManagementRaw = async ({
 
 
 
+
+export const getGPSRouteManagementRaw = async ({
+  page,
+  limit,
+  sortBy = 'timestamp',
+  sortOrder = 'DESC',
+  filters = {}
+}: GetDataParams) => {
+  // Validação prévia
+  if (!page || page < 1) page = 1;
+  if (!limit || limit < 1) limit = 50;
+  
+  const offset = (page - 1) * limit;
+  
+  let query = `
+    SELECT 
+      dev_eui,
+      timestamp,
+      gps_latitude,
+      gps_longitude,
+      gps_accuracy
+    FROM device_gps_report_monitoring 
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+
+  // Aplicar filtros específicos
+  if (filters.dev_eui) {
+    query += ` AND dev_eui = ?`;
+    params.push(filters.dev_eui);
+  }
+
+  if (filters.customer_name) {
+    query += ` AND customer_name LIKE ?`;
+    params.push(`%${filters.customer_name}%`);
+  }
+
+  if (filters.start_date) {
+    query += ` AND timestamp >= ?`;
+    params.push(filters.start_date);
+  }
+
+  if (filters.end_date) {
+    query += ` AND timestamp <= ?`;
+    params.push(filters.end_date);
+  }
+
+  // Filtrar apenas registros com GPS válido (opcional)
+  if (filters.valid_gps_only === 'true') {
+    query += ` AND gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL`;
+  }
+
+  // Filtrar por accuracy mínima (opcional)
+  if (filters.max_accuracy) {
+    query += ` AND gps_accuracy <= ?`;
+    params.push(filters.max_accuracy);
+  }
+
+  // Filtros genéricos por coluna (JSON)
+  if (filters.column_filters) {
+    try {
+      const columnFilters = typeof filters.column_filters === 'string' 
+        ? JSON.parse(filters.column_filters) 
+        : filters.column_filters;
+
+      for (const [column, value] of Object.entries(columnFilters)) {
+        if (value !== null && value !== undefined && value !== '') {
+          query += ` AND ${column} = ?`;
+          params.push(value);
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing column_filters:', error);
+    }
+  }
+
+  // Count total
+  const countQuery = query.replace(
+    'SELECT dev_eui, timestamp, gps_latitude, gps_longitude, gps_accuracy', 
+    'SELECT COUNT(*) as count'
+  );
+  
+  try {
+    const [countRows] = await xfinderdb_prod.query(countQuery, params);
+    const total = (countRows as any)[0]?.count || 0;
+
+    // Adicionar ordenação e paginação
+    query += ` ORDER BY ${sortBy} ${sortOrder}`;
+    query += ` LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    console.log('🔍 GPS Route Query:', query);
+    console.log('🔍 Params:', params);
+
+    const [rows] = await xfinderdb_prod.query(query, params);
+
+    return {
+      data: rows || [],
+      pagination: {
+        current_page: page,
+        per_page: limit,
+        total_records: total,
+        total_pages: Math.ceil(total / limit)
+      }
+    };
+  } catch (error) {
+    console.error('Error in getGPSRouteManagementRaw:', error);
+    throw error;
+  }
+};
+
+
+
+
 // =====================================
 // 📥 EXPORT DATA (CSV/JSON)
 // =====================================
