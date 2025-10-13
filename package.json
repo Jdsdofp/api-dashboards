@@ -2,11 +2,11 @@
   "name": "api-dashboards",
   "version": "1.0.0",
   "description": "",
-   "main": "dist/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "nodemon src/index.ts"
   },
   "author": "Jaderson Sousa",
   "license": "ISC",
@@ -19,6 +19,7 @@
     "@types/node": "^24.7.0",
     "@types/node-cache": "^4.2.5",
     "mysql2": "^3.15.2",
+    "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },

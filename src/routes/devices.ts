@@ -59,4 +59,32 @@ router.get('/raw/gps-errors', deviceController.getRawGPSErrorManagement);
 // =====================================
 router.get('/export/:table/:format', deviceController.exportTableData);
 
+// Rota para heartbeats
+
+// # Buscar todos os heartbeats (paginado)
+// GET /api/heartbeats/raw?page=1&limit=50
+
+// # Filtrar por dev_eui
+// GET /api/heartbeats/raw?dev_eui=ABC123&page=1&limit=50
+
+// # Filtrar por cliente
+// GET /api/heartbeats/raw?customer_name=Cliente%20XYZ
+
+// # Filtrar por período
+// GET /api/heartbeats/raw?start_date=2025-01-01&end_date=2025-01-31
+
+// # Ordenar por coluna específica
+// GET /api/heartbeats/raw?sortBy=dev_eui&sortOrder=ASC
+
+// # Filtros combinados
+// GET /api/heartbeats/raw?dev_eui=ABC123&start_date=2025-01-01&sortBy=received_at&sortOrder=DESC&page=1&limit=100
+
+
+
+router.get('/heartbeats/raw', deviceController.getRawHeartbeats);
+
+
+// Rota para scanned beacons
+router.get('/scanned-beacons/raw', deviceController.getRawScannedBeacons);
+
 export default router;

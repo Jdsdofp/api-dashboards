@@ -550,3 +550,80 @@ export const exportTableData = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getRawHeartbeats = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const sortBy = req.query.sortBy as string;
+    const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC';
+    
+    const filters: Record<string, any> = {};
+    
+    // Filtros específicos da tabela device_heartbeat
+    if (req.query.dev_eui) filters.dev_eui = req.query.dev_eui;
+    if (req.query.customer_name) filters.customer_name = req.query.customer_name;
+    if (req.query.start_date) filters.start_date = req.query.start_date;
+    if (req.query.end_date) filters.end_date = req.query.end_date;
+    
+    // Filtro genérico de colunas
+    if (req.query.column_filters) filters.column_filters = req.query.column_filters;
+    
+    console.log('🔍 Heartbeats Controller - filters:', filters);
+    
+    const data = await deviceService.getHeartbeatsManagementRaw({ 
+      page, 
+      limit, 
+      sortBy, 
+      sortOrder, 
+      filters 
+    });
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching raw heartbeats:', error);
+    res.status(500).json({
+      error: 'Failed to fetch raw heartbeats',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+export const getRawScannedBeacons = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const sortBy = req.query.sortBy as string;
+    const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC';
+    
+    const filters: Record<string, any> = {};
+    
+    // Filtros específicos da tabela device_scanned_beacons_list
+    if (req.query.dev_eui) filters.dev_eui = req.query.dev_eui;
+    if (req.query.customer_name) filters.customer_name = req.query.customer_name;
+    if (req.query.beacon_id) filters.beacon_id = req.query.beacon_id;
+    if (req.query.start_date) filters.start_date = req.query.start_date;
+    if (req.query.end_date) filters.end_date = req.query.end_date;
+    
+    // Filtro genérico de colunas
+    if (req.query.column_filters) filters.column_filters = req.query.column_filters;
+    
+    console.log('🔍 Scanned Beacons Controller - filters:', filters);
+    
+    const data = await deviceService.getScannedBeaconsManagementRaw({ 
+      page, 
+      limit, 
+      sortBy, 
+      sortOrder, 
+      filters 
+    });
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching raw scanned beacons:', error);
+    res.status(500).json({
+      error: 'Failed to fetch raw scanned beacons',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};

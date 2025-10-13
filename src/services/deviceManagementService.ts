@@ -1,6 +1,6 @@
 // src/services/deviceManagementService.ts
 import { xfinderdb_prod } from '../db/xfinderdb_prod'
-import { RowDataPacket } from 'mysql2';
+import { QueryResult, RowDataPacket } from 'mysql2';
 
 
 // =====================================
@@ -202,6 +202,15 @@ interface AccuracyDistribution extends RowDataPacket {
   report_count: number;
   percentage: number;
 }
+
+interface GetDataParams {
+  page: number;
+  limit: number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  filters?: Record<string, any>;
+}
+
 
 // =====================================
 // 📍 GPS & POSITIONING QUERIES
@@ -767,402 +776,6 @@ export const getGPSReportsRaw = async (params: PaginationParams): Promise<Pagina
 /**
  * Retorna dados brutos da tabela device_events_management
  */
-// export const getEventsManagementRaw = async (params: PaginationParams): Promise<PaginatedResponse<RowDataPacket>> => {
-//   const page = params.page || 1;
-//   const limit = params.limit || 50;
-//   const offset = (page - 1) * limit;
-
-//   // 🔒 Lista de colunas válidas para ordenação
-//   const validSortColumns = ['id', 'event_timestamp', 'event_type', 'dev_eui', 'customer_name'];
-//   const sortBy = validSortColumns.includes(params.sortBy || '') ? params.sortBy : 'id';
-//   const sortOrder = params.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-//   let whereClause = '1=1';
-//   const queryParams: any[] = [];
-
-//   if (params.filters) {
-//     if (params.filters.dev_eui) {
-//       whereClause += ' AND dev_eui = ?';
-//       queryParams.push(params.filters.dev_eui);
-//     }
-//     if (params.filters.event_type) {
-//       whereClause += ' AND event_type = ?';
-//       queryParams.push(params.filters.event_type);
-//     }
-//     if (params.filters.customer_name) {
-//       whereClause += ' AND customer_name LIKE ?';
-//       queryParams.push(`%${params.filters.customer_name}%`);
-//     }
-//     if (params.filters.is_valid_event !== undefined) {
-//       whereClause += ' AND is_valid_event = ?';
-//       queryParams.push(params.filters.is_valid_event);
-//     }
-//     if (params.filters.start_date) {
-//       whereClause += ' AND event_timestamp >= ?';
-//       queryParams.push(params.filters.start_date);
-//     }
-//     if (params.filters.end_date) {
-//       whereClause += ' AND event_timestamp <= ?';
-//       queryParams.push(params.filters.end_date);
-//     }
-//   }
-
-//   try {
-//     // 🔍 Conta o total de registros
-//     const [countResult] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT COUNT(*) as total FROM device_events_management WHERE ${whereClause}`,
-//       queryParams
-//     );
-
-//     const totalRecords = countResult?.[0]?.total ?? 0;
-
-//     // 📦 Busca os registros paginados
-//     const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT * FROM device_events_management 
-//        WHERE ${whereClause} 
-//        ORDER BY ${sortBy} ${sortOrder} 
-//        LIMIT ? OFFSET ?`,
-//       [...queryParams, limit, offset]
-//     );
-
-//     return {
-//       data: rows,
-//       pagination: {
-//         current_page: page,
-//         per_page: limit,
-//         total_records: totalRecords,
-//         total_pages: Math.ceil(totalRecords / limit),
-//       },
-//     };
-//   } catch (error: any) {
-//     console.error('❌ Erro ao buscar eventos:', error.sqlMessage || error.message);
-//     throw new Error(error.sqlMessage || 'Erro ao buscar eventos');
-//   }
-// };
-
-
-// export const getEventsManagementRaw = async (params: PaginationParams): Promise<PaginatedResponse<RowDataPacket>> => {
-//   const page = params.page || 1;
-//   const limit = params.limit || 50;
-//   const offset = (page - 1) * limit;
-
-//   // 🔒 Lista de colunas válidas para ordenação
-//   const validSortColumns = ['id', 'event_timestamp', 'event_type', 'dev_eui', 'customer_name'];
-//   const sortBy = validSortColumns.includes(params.sortBy || '') ? params.sortBy : 'id';
-//   const sortOrder = params.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-//   let whereClause = '1=1';
-//   const queryParams: any[] = [];
-
-//   // 🔍 Busca textual em múltiplos campos
-//   if (params.filters?.search_text) {
-//     whereClause += ` AND (
-//       dev_eui LIKE ? OR 
-//       customer_name LIKE ? OR 
-//       event_type LIKE ? OR
-//       id LIKE ?
-//     )`;
-//     const searchTerm = `%${params.filters.search_text}%`;
-//     queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
-//   }
-
-//   // 🎯 Filtros específicos
-//   if (params.filters) {
-//     if (params.filters.dev_eui) {
-//       whereClause += ' AND dev_eui = ?';
-//       queryParams.push(params.filters.dev_eui);
-//     }
-//     if (params.filters.event_type) {
-//       whereClause += ' AND event_type = ?';
-//       queryParams.push(params.filters.event_type);
-//     }
-//     if (params.filters.customer_name) {
-//       whereClause += ' AND customer_name LIKE ?';
-//       queryParams.push(`%${params.filters.customer_name}%`);
-//     }
-//     if (params.filters.is_valid_event !== undefined) {
-//       whereClause += ' AND is_valid_event = ?';
-//       queryParams.push(params.filters.is_valid_event);
-//     }
-//     if (params.filters.start_date) {
-//       whereClause += ' AND event_timestamp >= ?';
-//       queryParams.push(params.filters.start_date);
-//     }
-//     if (params.filters.end_date) {
-//       whereClause += ' AND event_timestamp <= ?';
-//       queryParams.push(params.filters.end_date);
-//     }
-    
-//     // 🆕 Filtro por faixa de bateria
-//     if (params.filters.battery_min !== undefined) {
-//       whereClause += ' AND battery_level >= ?';
-//       queryParams.push(params.filters.battery_min);
-//     }
-//     if (params.filters.battery_max !== undefined) {
-//       whereClause += ' AND battery_level <= ?';
-//       queryParams.push(params.filters.battery_max);
-//     }
-//   }
-
-//   try {
-//     // 🔍 Conta o total de registros
-//     const [countResult] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT COUNT(*) as total FROM device_events_management WHERE ${whereClause}`,
-//       queryParams
-//     );
-
-//     const totalRecords = countResult?.[0]?.total ?? 0;
-
-//     // 📦 Busca os registros paginados
-//     const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT * FROM device_events_management 
-//        WHERE ${whereClause} 
-//        ORDER BY ${sortBy} ${sortOrder} 
-//        LIMIT ? OFFSET ?`,
-//       [...queryParams, limit, offset]
-//     );
-
-//     return {
-//       data: rows,
-//       pagination: {
-//         current_page: page,
-//         per_page: limit,
-//         total_records: totalRecords,
-//         total_pages: Math.ceil(totalRecords / limit),
-//       },
-//     };
-//   } catch (error: any) {
-//     console.error('❌ Erro ao buscar eventos:', error.sqlMessage || error.message);
-//     throw new Error(error.sqlMessage || 'Erro ao buscar eventos');
-//   }
-// };
-
-// export const getEventsManagementRaw = async (params: PaginationParams): Promise<PaginatedResponse<RowDataPacket>> => {
-//   const page = params.page || 1;
-//   const limit = params.limit || 50;
-//   const offset = (page - 1) * limit;
-
-//   // 🔒 Lista de colunas válidas para ordenação
-//   const validSortColumns = ['id', 'event_timestamp', 'event_type', 'dev_eui', 'customer_name'];
-//   const sortBy = validSortColumns.includes(params.sortBy || '') ? params.sortBy : 'id';
-//   const sortOrder = params.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-//   let whereClause = '1=1';
-//   const queryParams: any[] = [];
-
-//   // 🆕 Filtros dinâmicos por coluna
-//   if (params.filters) {
-//     // Filtro de busca global (mantém compatibilidade)
-//     if (params.filters.search_text) {
-//       whereClause += ` AND (
-//         dev_eui LIKE ? OR 
-//         customer_name LIKE ? OR 
-//         event_type LIKE ? OR
-//         id LIKE ?
-//       )`;
-//       const searchTerm = `%${params.filters.search_text}%`;
-//       queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
-//     }
-
-//     // 🎯 Filtros específicos por coluna
-//     if (params.filters.column_filters) {
-//       const columnFilters = JSON.parse(params.filters.column_filters);
-      
-//       Object.entries(columnFilters).forEach(([column, value]) => {
-//         if (value && String(value).trim() !== '') {
-//           whereClause += ` AND ${column} LIKE ?`;
-//           queryParams.push(`%${value}%`);
-//         }
-//       });
-//     }
-
-//     // 📅 Filtros específicos existentes (mantém compatibilidade)
-//     if (params.filters.dev_eui) {
-//       whereClause += ' AND dev_eui = ?';
-//       queryParams.push(params.filters.dev_eui);
-//     }
-//     if (params.filters.event_type) {
-//       whereClause += ' AND event_type = ?';
-//       queryParams.push(params.filters.event_type);
-//     }
-//     if (params.filters.customer_name) {
-//       whereClause += ' AND customer_name LIKE ?';
-//       queryParams.push(`%${params.filters.customer_name}%`);
-//     }
-//     if (params.filters.is_valid_event !== undefined) {
-//       whereClause += ' AND is_valid_event = ?';
-//       queryParams.push(params.filters.is_valid_event);
-//     }
-//     if (params.filters.start_date) {
-//       whereClause += ' AND event_timestamp >= ?';
-//       queryParams.push(params.filters.start_date);
-//     }
-//     if (params.filters.end_date) {
-//       whereClause += ' AND event_timestamp <= ?';
-//       queryParams.push(params.filters.end_date);
-//     }
-//   }
-
-//   try {
-//     // 🔍 Conta o total de registros
-//     const [countResult] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT COUNT(*) as total FROM device_events_management WHERE ${whereClause}`,
-//       queryParams
-//     );
-
-//     const totalRecords = countResult?.[0]?.total ?? 0;
-
-//     // 📦 Busca os registros paginados
-//     const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT * FROM device_events_management 
-//        WHERE ${whereClause} 
-//        ORDER BY ${sortBy} ${sortOrder} 
-//        LIMIT ? OFFSET ?`,
-//       [...queryParams, limit, offset]
-//     );
-
-//     return {
-//       data: rows,
-//       pagination: {
-//         current_page: page,
-//         per_page: limit,
-//         total_records: totalRecords,
-//         total_pages: Math.ceil(totalRecords / limit),
-//       },
-//     };
-//   } catch (error: any) {
-//     console.error('❌ Erro ao buscar eventos:', error.sqlMessage || error.message);
-//     throw new Error(error.sqlMessage || 'Erro ao buscar eventos');
-//   }
-// };
-
-// export const getEventsManagementRaw = async (params: PaginationParams): Promise<PaginatedResponse<RowDataPacket>> => {
-
-//   console.log('🔍 PARAMS RECEBIDOS NO BACKEND:', JSON.stringify(params, null, 2));
-
-
-//   const page = params.page || 1;
-//   const limit = params.limit || 50;
-//   const offset = (page - 1) * limit;
-
-//   const validSortColumns = ['id', 'event_timestamp', 'event_type', 'dev_eui', 'customer_name'];
-//   const sortBy = validSortColumns.includes(params.sortBy || '') ? params.sortBy : 'id';
-//   const sortOrder = params.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-//   let whereClause = '1=1';
-//   const queryParams: any[] = [];
-
-//   // 🎯 TRATAMENTO ESPECÍFICO PARA COLUMN_FILTERS
-//   if (params.filters?.column_filters) {
-//     console.log('🔍 COLUMN_FILTERS RAW:', params.filters.column_filters);
-//     console.log('🔍 TIPO:', typeof params.filters.column_filters);
-
-//     try {
-//       let columnFilters;
-      
-//       // Caso 1: Já é um objeto (pode acontecer em alguns ambientes)
-//       if (typeof params.filters.column_filters === 'object') {
-//         columnFilters = params.filters.column_filters;
-//       } 
-//       // Caso 2: É string JSON (mais comum)
-//       else if (typeof params.filters.column_filters === 'string') {
-//         columnFilters = JSON.parse(params.filters.column_filters);
-//       }
-      
-//       console.log('🔍 COLUMN_FILTERS PARSEADO:', columnFilters);
-
-//       if (columnFilters && typeof columnFilters === 'object') {
-//         Object.entries(columnFilters).forEach(([column, value]) => {
-//           console.log(`🔍 Processando filtro: ${column} = "${value}"`);
-          
-//           if (value !== null && value !== undefined && String(value).trim() !== '') {
-//             // Lista de colunas válidas para prevenir SQL injection
-//             const validColumns = [
-//               'id', 'event_timestamp', 'event_type', 'dev_eui', 'customer_name', 
-//               'battery_level', 'is_valid_event', 'temperature', 'dynamic_motion_state',
-//               'gps_latitude', 'gps_longitude', 'gps_accuracy', 'speed'
-//             ];
-            
-//             if (validColumns.includes(column)) {
-//               whereClause += ` AND ${column} LIKE ?`;
-//               queryParams.push(`%${value}%`);
-//               console.log(`✅ Filtro aplicado: ${column} LIKE %${value}%`);
-//             } else {
-//               console.warn(`🚫 Coluna inválida ignorada: ${column}`);
-//             }
-//           }
-//         });
-//       }
-//     } catch (error) {
-//       console.error('💥 ERRO CRÍTICO no parse do column_filters:', error);
-//     }
-//   }
-
-//   // 🔍 Outros filtros (mantidos para compatibilidade)
-//   if (params.filters) {
-//     if (params.filters.search_text) {
-//       whereClause += ` AND (
-//         dev_eui LIKE ? OR 
-//         customer_name LIKE ? OR 
-//         event_type LIKE ? OR
-//         CAST(id AS CHAR) LIKE ?
-//       )`;
-//       const searchTerm = `%${params.filters.search_text}%`;
-//       queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
-//     }
-
-//     // ... outros filtros existentes
-//     if (params.filters.dev_eui) {
-//       whereClause += ' AND dev_eui = ?';
-//       queryParams.push(params.filters.dev_eui);
-//     }
-//     if (params.filters.event_type) {
-//       whereClause += ' AND event_type = ?';
-//       queryParams.push(params.filters.event_type);
-//     }
-//     // ... continue com os outros filtros
-//   }
-
-//   console.log('🎯 QUERY FINAL:');
-//   console.log('WHERE:', whereClause);
-//   console.log('PARAMS:', queryParams);
-//   console.log('SORT:', `${sortBy} ${sortOrder}`);
-//   console.log('PAGINATION:', `LIMIT ${limit} OFFSET ${offset}`);
-
-//   try {
-//     // 🔍 Conta o total de registros
-//     const [countResult] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT COUNT(*) as total FROM device_events_management WHERE ${whereClause}`,
-//       queryParams
-//     );
-
-//     const totalRecords = countResult?.[0]?.total ?? 0;
-
-//     // 📦 Busca os registros paginados
-//     const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       `SELECT * FROM device_events_management 
-//        WHERE ${whereClause} 
-//        ORDER BY ${sortBy} ${sortOrder} 
-//        LIMIT ? OFFSET ?`,
-//       [...queryParams, limit, offset]
-//     );
-
-//     console.log(`✅ Sucesso: ${rows.length} registros de ${totalRecords} total`);
-
-//     return {
-//       data: rows,
-//       pagination: {
-//         current_page: page,
-//         per_page: limit,
-//         total_records: totalRecords,
-//         total_pages: Math.ceil(totalRecords / limit),
-//       },
-//     };
-//   } catch (error: any) {
-//     console.error('❌ Erro ao buscar eventos:', error.sqlMessage || error.message);
-//     throw new Error(error.sqlMessage || 'Erro ao buscar eventos');
-//   }
-// };
 
 export const getEventsManagementRaw = async (params: any): Promise<PaginatedResponse<RowDataPacket>> => {
   console.log('🔍 PARAMS RECEBIDOS NO BACKEND (RAW):', params);
@@ -1535,6 +1148,180 @@ export const getGPSErrorManagementRaw = async (
     },
   };
 };
+
+
+export const getHeartbeatsManagementRaw = async ({
+  page,
+  limit,
+  sortBy = 'heartbeat_timestamp',
+  sortOrder = 'DESC',
+  filters = {}
+}: GetDataParams) => {
+  const offset = (page - 1) * limit;
+  
+  let query = 'SELECT * FROM device_heartbeat WHERE 1=1';
+  const params: any[] = [];
+
+  // Aplicar filtros específicos
+  if (filters.dev_eui) {
+    query += ` AND dev_eui = ?`;
+    params.push(filters.dev_eui);
+  }
+
+  if (filters.customer_name) {
+    query += ` AND customer_name LIKE ?`;
+    params.push(`%${filters.customer_name}%`);
+  }
+
+  if (filters.start_date) {
+    query += ` AND heartbeat_timestamp >= ?`;
+    params.push(filters.start_date);
+  }
+
+  if (filters.end_date) {
+    query += ` AND heartbeat_timestamp <= ?`;
+    params.push(filters.end_date);
+  }
+
+  // Filtros genéricos por coluna (JSON)
+  if (filters.column_filters) {
+    try {
+      const columnFilters = typeof filters.column_filters === 'string' 
+        ? JSON.parse(filters.column_filters) 
+        : filters.column_filters;
+
+      for (const [column, value] of Object.entries(columnFilters)) {
+        if (value !== null && value !== undefined && value !== '') {
+          query += ` AND ${column} = ?`;
+          params.push(value);
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing column_filters:', error);
+    }
+  }
+
+  // Count total - MySQL retorna [rows, fields]
+  const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as count');
+  const [countRows] = await xfinderdb_prod.query(countQuery, params);
+  const total = (countRows as any)[0].count;
+
+  // Adicionar ordenação e paginação
+  query += ` ORDER BY ${sortBy} ${sortOrder}`;
+  query += ` LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  console.log('🔍 Query:', query);
+  console.log('🔍 Params:', params);
+
+  // MySQL retorna [rows, fields]
+  const [rows] = await xfinderdb_prod.query(query, params);
+
+  return {
+    data: rows,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit)
+    }
+  };
+};
+
+
+export const getScannedBeaconsManagementRaw = async ({
+  page,
+  limit,
+  sortBy = 'dev_eui',
+  sortOrder = 'DESC',
+  filters = {}
+}: GetDataParams) => {
+  // Validação prévia
+  if (!page || page < 1) page = 1;
+  if (!limit || limit < 1) limit = 50;
+  
+  const offset = (page - 1) * limit;
+  
+  let query = 'SELECT * FROM device_scanned_beacons_list WHERE 1=1';
+  const params: any[] = [];
+
+  // Aplicar filtros específicos
+  if (filters.dev_eui) {
+    query += ` AND dev_eui = ?`;
+    params.push(filters.dev_eui);
+  }
+
+  if (filters.customer_name) {
+    query += ` AND customer_name LIKE ?`;
+    params.push(`%${filters.customer_name}%`);
+  }
+
+  if (filters.beacon_id) {
+    query += ` AND beacon_id = ?`;
+    params.push(filters.beacon_id);
+  }
+
+  if (filters.start_date) {
+    query += ` AND scanned_at >= ?`;
+    params.push(filters.start_date);
+  }
+
+  if (filters.end_date) {
+    query += ` AND scanned_at <= ?`;
+    params.push(filters.end_date);
+  }
+
+  // Filtros genéricos por coluna (JSON)
+  if (filters.column_filters) {
+    try {
+      const columnFilters = typeof filters.column_filters === 'string' 
+        ? JSON.parse(filters.column_filters) 
+        : filters.column_filters;
+
+      for (const [column, value] of Object.entries(columnFilters)) {
+        if (value !== null && value !== undefined && value !== '') {
+          query += ` AND ${column} = ?`;
+          params.push(value);
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing column_filters:', error);
+    }
+  }
+
+  // Count total - MySQL retorna [rows, fields]
+  const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as count');
+  
+  try {
+    const [countRows] = await xfinderdb_prod.query(countQuery, params);
+    const total = (countRows as any)[0]?.count || 0;
+
+    // Adicionar ordenação e paginação
+    query += ` ORDER BY ${sortBy} ${sortOrder}`;
+    query += ` LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    console.log('🔍 Query:', query);
+    console.log('🔍 Params:', params);
+
+    // MySQL retorna [rows, fields]
+    const [rows] = await xfinderdb_prod.query(query, params);
+
+    return {
+      data: rows || [],
+      pagination: {
+        current_page: page,
+        per_page: limit,
+        total_records: total,
+        total_pages: Math.ceil(total / limit)
+      }
+    };
+  } catch (error) {
+    console.error('Error in getScannedBeaconsManagementRaw:', error);
+    throw error;
+  }
+};
+
 
 
 // =====================================
