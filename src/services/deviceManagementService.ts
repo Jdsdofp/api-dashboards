@@ -416,11 +416,23 @@ export const getActiveSOSAlerts = async () => {
       a.dev_eui,
       a.customer_name,
       a.event_timestamp AS sos_start_time,
-      a.gps_latitude,
-      a.gps_longitude,
-      a.battery_level,
+      CAST(COALESCE(a.gps_latitude, gps.gps_latitude) AS DECIMAL(10,8)) AS gps_latitude,
+      CAST(COALESCE(a.gps_longitude, gps.gps_longitude) AS DECIMAL(11,8)) AS gps_longitude,
+      COALESCE(a.battery_level, gps.battery_level) AS battery_level,
       TIMESTAMPDIFF(MINUTE, a.event_timestamp, NOW()) AS minutes_elapsed
     FROM device_events_management a
+    LEFT JOIN (
+      SELECT 
+        dev_eui,
+        gps_latitude,
+        gps_longitude,
+        battery_level,
+        ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
+      FROM device_gps_report_monitoring
+      WHERE gps_latitude IS NOT NULL 
+        AND gps_longitude IS NOT NULL
+        AND is_valid_gps = 1
+    ) gps ON a.dev_eui = gps.dev_eui AND gps.row_num = 1
     WHERE a.event_type = 'SOS_MODE_START'
       AND a.is_valid_event = 1
       AND NOT EXISTS (
