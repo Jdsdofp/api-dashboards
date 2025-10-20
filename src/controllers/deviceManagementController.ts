@@ -2,6 +2,38 @@
 import { Request, Response } from 'express';
 import * as deviceService from '../services/deviceManagementService';
 
+
+
+// types/gps.types.ts
+export interface GPSFilters {
+  dev_eui?: string | string[];
+  start_date?: string;
+  end_date?: string;
+  valid_gps_only?: boolean;
+  max_accuracy?: number;
+  min_accuracy?: number;
+}
+
+export interface GPSDataParams {
+  page: number;
+  limit: number;
+  sortBy: string;
+  sortOrder: 'ASC' | 'DESC';
+  filters: GPSFilters;
+  latestOnly?: boolean;
+}
+
+export interface GPSDataResponse {
+  success: boolean;
+  data: any[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // =====================================
 // 📍 GPS & POSITIONING ENDPOINTS
 // =====================================
@@ -668,58 +700,181 @@ export const getRawGPSRoute = async (req: Request, res: Response) => {
   }
 };
 
+// export const getGPSData = async (req: Request, res: Response) => {
+//   try {
+//     // Parsing de parâmetros de paginação
+//     const page = parseInt(req.query.page as string) || 1;
+//     const limit = parseInt(req.query.limit as string) || 50;
+//     const sortBy = (req.query.sortBy as string) || 'timestamp';
+//     const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC' || 'DESC';
+
+//     // Parsing de filtros
+//     const filters: any = {};
+
+//     // dev_eui pode ser string ou array
+//     if (req.query.dev_eui) {
+//       const devEui = req.query.dev_eui;
+//       // Se vier como string com vírgulas, converter para array
+//       if (typeof devEui === 'string' && devEui.includes(',')) {
+//         filters.dev_eui = devEui.split(',').map(d => d.trim()).filter(d => d);
+//       } else {
+//         filters.dev_eui = devEui;
+//       }
+//     }
+
+//     // Filtros de data
+//     if (req.query.start_date) {
+//       filters.start_date = req.query.start_date as string;
+//     }
+
+//     if (req.query.end_date) {
+//       filters.end_date = req.query.end_date as string;
+//     }
+
+//     // Filtros de GPS
+//     if (req.query.valid_gps_only) {
+//       filters.valid_gps_only = req.query.valid_gps_only === 'true';
+//     }
+
+//     if (req.query.max_accuracy) {
+//       filters.max_accuracy = parseFloat(req.query.max_accuracy as string);
+//     }
+
+//     if (req.query.min_accuracy) {
+//       filters.min_accuracy = parseFloat(req.query.min_accuracy as string);
+//     }
+
+//     console.log('🔍 GPS Controller - Filters:', JSON.stringify(filters, null, 2));
+
+//     const result = await  deviceService.getGPSData({
+//       page,
+//       limit,
+//       sortBy,
+//       sortOrder,
+//       filters
+//     });
+
+//     res.json(result);
+//   } catch (error) {
+//     console.error('❌ Error in getGPSData controller:', error);
+//     res.status(500).json({
+//       success: false,
+//       error: 'Failed to fetch GPS data',
+//       message: error instanceof Error ? error.message : 'Unknown error'
+//     });
+//   }
+// };
+
+
+
+// export const getGPSData = async (req: Request, res: Response) => {
+//   try {
+//     const page = parseInt(req.query.page as string) || 1;
+//     const limit = parseInt(req.query.limit as string) || 50;
+//     const sortBy = (req.query.sortBy as string) || 'timestamp';
+//     const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC' || 'DESC';
+//     const latestOnly = req.query.latest_only === 'true'; // ✨ Novo parâmetro
+    
+//     const filters: any = {};
+    
+//     // dev_eui pode ser string ou array
+//     if (req.query.dev_eui) {
+//       const devEui = req.query.dev_eui;
+//       if (typeof devEui === 'string' && devEui.includes(',')) {
+//         filters.dev_eui = devEui.split(',').map(d => d.trim()).filter(d => d);
+//       } else {
+//         filters.dev_eui = devEui;
+//       }
+//     }
+
+//     if (req.query.start_date) {
+//       filters.start_date = req.query.start_date as string;
+//     }
+//     if (req.query.end_date) {
+//       filters.end_date = req.query.end_date as string;
+//     }
+//     if (req.query.valid_gps_only) {
+//       filters.valid_gps_only = req.query.valid_gps_only === 'true';
+//     }
+//     if (req.query.max_accuracy) {
+//       filters.max_accuracy = parseFloat(req.query.max_accuracy as string);
+//     }
+//     if (req.query.min_accuracy) {
+//       filters.min_accuracy = parseFloat(req.query.min_accuracy as string);
+//     }
+
+//     console.log('🔍 GPS Controller - Filters:', JSON.stringify(filters, null, 2));
+//     console.log('🔍 Latest Only:', latestOnly);
+
+//     const result = await deviceService.getGPSData({
+//       page,
+//       limit,
+//       sortBy,
+//       sortOrder,
+//       filters,
+//       latestOnly // ✨ Passar o novo parâmetro
+//     });
+
+//     res.json(result);
+//   } catch (error) {
+//     console.error('❌ Error in getGPSData controller:', error);
+//     res.status(500).json({
+//       success: false,
+//       error: 'Failed to fetch GPS data',
+//       message: error instanceof Error ? error.message : 'Unknown error'
+//     });
+//   }
+// };
+
+
+
 export const getGPSData = async (req: Request, res: Response) => {
   try {
-    // Parsing de parâmetros de paginação
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
     const sortBy = (req.query.sortBy as string) || 'timestamp';
     const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC' || 'DESC';
+    const latestOnly = req.query.latest_only === 'true';
 
-    // Parsing de filtros
-    const filters: any = {};
-
-    // dev_eui pode ser string ou array
+    const filters: GPSFilters = {};
+    
+    // Processar dev_eui
     if (req.query.dev_eui) {
       const devEui = req.query.dev_eui;
-      // Se vier como string com vírgulas, converter para array
       if (typeof devEui === 'string' && devEui.includes(',')) {
         filters.dev_eui = devEui.split(',').map(d => d.trim()).filter(d => d);
       } else {
-        filters.dev_eui = devEui;
+        filters.dev_eui = devEui as string;
       }
     }
 
-    // Filtros de data
+    // Processar outros filtros
     if (req.query.start_date) {
       filters.start_date = req.query.start_date as string;
     }
-
     if (req.query.end_date) {
       filters.end_date = req.query.end_date as string;
     }
-
-    // Filtros de GPS
     if (req.query.valid_gps_only) {
       filters.valid_gps_only = req.query.valid_gps_only === 'true';
     }
-
     if (req.query.max_accuracy) {
       filters.max_accuracy = parseFloat(req.query.max_accuracy as string);
     }
-
     if (req.query.min_accuracy) {
       filters.min_accuracy = parseFloat(req.query.min_accuracy as string);
     }
 
     console.log('🔍 GPS Controller - Filters:', JSON.stringify(filters, null, 2));
+    console.log('🔍 Latest Only:', latestOnly);
 
-    const result = await  deviceService.getGPSData({
+    const result = await deviceService.getGPSData({
       page,
       limit,
       sortBy,
       sortOrder,
-      filters
+      filters,
+      latestOnly
     });
 
     res.json(result);
@@ -732,6 +887,8 @@ export const getGPSData = async (req: Request, res: Response) => {
     });
   }
 };
+
+
 
 export const getGPSStats = async (req: Request, res: Response) => {
   try {
