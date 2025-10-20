@@ -637,7 +637,7 @@ export const getRawGPSRoute = async (req: Request, res: Response) => {
     
     const filters: Record<string, any> = {};
     
-    // Filtros específicos
+    // Filtros específicos - agora suporta array ou string
     if (req.query.dev_eui) filters.dev_eui = req.query.dev_eui;
     if (req.query.customer_name) filters.customer_name = req.query.customer_name;
     if (req.query.start_date) filters.start_date = req.query.start_date;
@@ -664,6 +664,126 @@ export const getRawGPSRoute = async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to fetch GPS route',
       message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+export const getGPSData = async (req: Request, res: Response) => {
+  try {
+    // Parsing de parâmetros de paginação
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const sortBy = (req.query.sortBy as string) || 'timestamp';
+    const sortOrder = (req.query.sortOrder as string)?.toUpperCase() as 'ASC' | 'DESC' || 'DESC';
+
+    // Parsing de filtros
+    const filters: any = {};
+
+    // dev_eui pode ser string ou array
+    if (req.query.dev_eui) {
+      const devEui = req.query.dev_eui;
+      // Se vier como string com vírgulas, converter para array
+      if (typeof devEui === 'string' && devEui.includes(',')) {
+        filters.dev_eui = devEui.split(',').map(d => d.trim()).filter(d => d);
+      } else {
+        filters.dev_eui = devEui;
+      }
+    }
+
+    // Filtros de data
+    if (req.query.start_date) {
+      filters.start_date = req.query.start_date as string;
+    }
+
+    if (req.query.end_date) {
+      filters.end_date = req.query.end_date as string;
+    }
+
+    // Filtros de GPS
+    if (req.query.valid_gps_only) {
+      filters.valid_gps_only = req.query.valid_gps_only === 'true';
+    }
+
+    if (req.query.max_accuracy) {
+      filters.max_accuracy = parseFloat(req.query.max_accuracy as string);
+    }
+
+    if (req.query.min_accuracy) {
+      filters.min_accuracy = parseFloat(req.query.min_accuracy as string);
+    }
+
+    console.log('🔍 GPS Controller - Filters:', JSON.stringify(filters, null, 2));
+
+    const result = await  deviceService.getGPSData({
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+      filters
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error in getGPSData controller:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch GPS data',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+export const getGPSStats = async (req: Request, res: Response) => {
+  try {
+    const filters: any = {};
+
+    if (req.query.dev_eui) {
+      const devEui = req.query.dev_eui;
+      if (typeof devEui === 'string' && devEui.includes(',')) {
+        filters.dev_eui = devEui.split(',').map(d => d.trim()).filter(d => d);
+      } else {
+        filters.dev_eui = devEui;
+      }
+    }
+
+    if (req.query.start_date) filters.start_date = req.query.start_date;
+    if (req.query.end_date) filters.end_date = req.query.end_date;
+
+    const stats = await deviceService.getGPSStats(filters);
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('❌ Error in getGPSStats controller:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch GPS statistics',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+
+// Endpoint simplificado - apenas lista de DEV_EUIs
+export const getDeviceList = async (req: Request, res: Response) => {
+  try {
+    console.log('📋 Fetching device list...');
+
+    const devices = await deviceService.getDeviceList();
+
+    res.json({
+      success: true,
+      data: devices,
+      total: devices.length,
+    });
+  } catch (error) {
+    console.error('❌ Error in getDeviceList controller:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch device list',
+      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 };

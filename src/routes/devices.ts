@@ -90,4 +90,13 @@ router.get('/scanned-beacons/raw', deviceController.getRawScannedBeacons);
 // 🆕 Nova rota para GPS Route
 router.get('/gps-route/raw', deviceController.getRawGPSRoute);
 
+// Buscar dados GPS com filtros
+router.get('/gps-data', deviceController.getGPSData);
+
+// Obter estatísticas
+router.get('/gps-stats', deviceController.getGPSStats);
+
+router.get('/device/list', deviceController.getDeviceList);
+
+
 export default router;

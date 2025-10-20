@@ -215,6 +215,31 @@ interface GetDataParams {
 // =====================================
 // 📍 GPS & POSITIONING QUERIES
 // =====================================
+interface GPSFilters {
+  dev_eui?: string | string[];
+  start_date?: string;
+  end_date?: string;
+  valid_gps_only?: boolean;
+  max_accuracy?: number;
+  min_accuracy?: number;
+}
+
+interface GPSQueryParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  filters?: GPSFilters;
+}
+
+interface GPSRecord extends RowDataPacket {
+  dev_eui: string;
+  timestamp: Date;
+  gps_latitude: number;
+  gps_longitude: number;
+  gps_accuracy: number;
+}
+
 
 /**
  * Q1: Posição atual do dispositivo
@@ -1351,18 +1376,35 @@ export const getGPSRouteManagementRaw = async ({
   const offset = (page - 1) * limit;
   
   let query = `
-    SELECT 
-      dev_eui,
-      timestamp,
-      gps_latitude,
-      gps_longitude,
-      gps_accuracy
-    FROM device_gps_report_monitoring 
-    WHERE 1=1
+      SELECT 
+        dev_eui,
+        timestamp,
+        gps_latitude,
+        gps_longitude,
+        gps_accuracy
+      FROM device_gps_report_monitoring 
+      WHERE 1=1
   `;
   const params: any[] = [];
 
+
+  
   // Aplicar filtros específicos
+  if (filters.dev_eui) {
+    if (Array.isArray(filters.dev_eui)) {
+      // Múltiplos dev_eui - usa IN
+      if (filters.dev_eui.length > 0) {
+        const placeholders = filters.dev_eui.map(() => '?').join(',');
+        query += ` AND dev_eui IN (${placeholders})`;
+        params.push(...filters.dev_eui);
+      }
+    } else {
+      // Único dev_eui - usa =
+      query += ` AND dev_eui = ?`;
+      params.push(filters.dev_eui);
+    }
+  }
+
   if (filters.dev_eui) {
     query += ` AND dev_eui = ?`;
     params.push(filters.dev_eui);
@@ -1413,13 +1455,13 @@ export const getGPSRouteManagementRaw = async ({
   }
 
   // Count total
-  const countQuery = query.replace(
+ const countQuery = query.replace(
     'SELECT dev_eui, timestamp, gps_latitude, gps_longitude, gps_accuracy', 
     'SELECT COUNT(*) as count'
   );
   
   try {
-    const [countRows] = await xfinderdb_prod.query(countQuery, params);
+     const [countRows] = await xfinderdb_prod.query(countQuery, params);
     const total = (countRows as any)[0]?.count || 0;
 
     // Adicionar ordenação e paginação
@@ -1427,10 +1469,15 @@ export const getGPSRouteManagementRaw = async ({
     query += ` LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
+    const paginationParams = [...params, limit, offset];
+
+
     console.log('🔍 GPS Route Query:', query);
     console.log('🔍 Params:', params);
 
-    const [rows] = await xfinderdb_prod.query(query, params);
+
+
+    const [rows] = await xfinderdb_prod.query(query, paginationParams);
 
     return {
       data: rows || [],
@@ -1443,6 +1490,193 @@ export const getGPSRouteManagementRaw = async ({
     };
   } catch (error) {
     console.error('Error in getGPSRouteManagementRaw:', error);
+    throw error;
+  }
+};
+
+
+export const getGPSData = async ({
+  page = 1,
+  limit = 50,
+  sortBy = 'timestamp',
+  sortOrder = 'DESC',
+  filters = {}
+}: GPSQueryParams) => {
+  // Validação e sanitização
+  const validPage = Math.max(1, page);
+  const validLimit = Math.min(Math.max(1, limit), 1000); // Máximo 1000 registros
+  const offset = (validPage - 1) * validLimit;
+
+  // Validar sortBy para prevenir SQL injection
+  const allowedSortColumns = ['timestamp', 'dev_eui', 'gps_accuracy'];
+  const validSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'timestamp';
+  const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+
+  // Construir query base
+  let query = `
+    SELECT 
+      dev_eui,
+      timestamp,
+      gps_latitude,
+      gps_longitude,
+      gps_accuracy
+    FROM device_gps_report_monitoring 
+    WHERE 1=1
+  `;
+
+  const params: any[] = [];
+
+  // Filtro por dev_eui (único ou múltiplo)
+  if (filters.dev_eui) {
+    if (Array.isArray(filters.dev_eui) && filters.dev_eui.length > 0) {
+      // Múltiplos dev_eui
+      const placeholders = filters.dev_eui.map(() => '?').join(',');
+      query += ` AND dev_eui IN (${placeholders})`;
+      params.push(...filters.dev_eui);
+    } else if (typeof filters.dev_eui === 'string' && filters.dev_eui.trim()) {
+      // Único dev_eui
+      query += ` AND dev_eui = ?`;
+      params.push(filters.dev_eui.trim());
+    }
+  }
+
+  // Filtro por período (data inicial)
+  if (filters.start_date) {
+    query += ` AND timestamp >= ?`;
+    params.push(filters.start_date);
+  }
+
+  // Filtro por período (data final)
+  if (filters.end_date) {
+    query += ` AND timestamp <= ?`;
+    params.push(filters.end_date);
+  }
+
+  // Filtrar apenas GPS válido
+  if (filters.valid_gps_only) {
+    query += ` AND gps_latitude IS NOT NULL 
+               AND gps_longitude IS NOT NULL
+               AND gps_latitude BETWEEN -90 AND 90
+               AND gps_longitude BETWEEN -180 AND 180`;
+  }
+
+  // Filtro por accuracy máxima
+  if (filters.max_accuracy !== undefined && filters.max_accuracy > 0) {
+    query += ` AND gps_accuracy <= ?`;
+    params.push(filters.max_accuracy);
+  }
+
+  // Filtro por accuracy mínima
+  if (filters.min_accuracy !== undefined && filters.min_accuracy >= 0) {
+    query += ` AND gps_accuracy >= ?`;
+    params.push(filters.min_accuracy);
+  }
+
+  try {
+    // Query para contar total de registros
+    const countQuery = query.replace(
+      /SELECT[\s\S]*?FROM/i,
+      'SELECT COUNT(*) as total FROM'
+    );
+
+    const [countResult] = await xfinderdb_prod.query<RowDataPacket[]>(
+      countQuery,
+      params
+    );
+    const total = countResult[0]?.total || 0;
+
+    // Adicionar ordenação e paginação
+    query += ` ORDER BY ${validSortBy} ${validSortOrder}`;
+    query += ` LIMIT ? OFFSET ?`;
+    const queryParams = [...params, validLimit, offset];
+
+    console.log('📍 GPS Query:', query);
+    console.log('📍 Params:', queryParams);
+
+    // Executar query principal
+    const [rows] = await xfinderdb_prod.query<GPSRecord[]>(query, queryParams);
+
+    return {
+      success: true,
+      data: rows,
+      pagination: {
+        current_page: validPage,
+        per_page: validLimit,
+        total_records: total,
+        total_pages: Math.ceil(total / validLimit),
+        has_next: validPage < Math.ceil(total / validLimit),
+        has_prev: validPage > 1
+      },
+      filters_applied: filters
+    };
+  } catch (error) {
+    console.error('❌ Error in getGPSData:', error);
+    throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
+
+// Função auxiliar para obter estatísticas do GPS
+export const getGPSStats = async (filters: GPSFilters = {}) => {
+  let query = `
+    SELECT 
+      COUNT(*) as total_records,
+      COUNT(DISTINCT dev_eui) as unique_devices,
+      MIN(timestamp) as oldest_record,
+      MAX(timestamp) as newest_record,
+      AVG(gps_accuracy) as avg_accuracy,
+      MIN(gps_accuracy) as min_accuracy,
+      MAX(gps_accuracy) as max_accuracy
+    FROM device_gps_report_monitoring 
+    WHERE 1=1
+  `;
+
+  const params: any[] = [];
+
+  // Aplicar os mesmos filtros
+  if (filters.dev_eui) {
+    if (Array.isArray(filters.dev_eui) && filters.dev_eui.length > 0) {
+      const placeholders = filters.dev_eui.map(() => '?').join(',');
+      query += ` AND dev_eui IN (${placeholders})`;
+      params.push(...filters.dev_eui);
+    } else if (typeof filters.dev_eui === 'string' && filters.dev_eui.trim()) {
+      query += ` AND dev_eui = ?`;
+      params.push(filters.dev_eui.trim());
+    }
+  }
+
+  if (filters.start_date) {
+    query += ` AND timestamp >= ?`;
+    params.push(filters.start_date);
+  }
+
+  if (filters.end_date) {
+    query += ` AND timestamp <= ?`;
+    params.push(filters.end_date);
+  }
+
+  try {
+    const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(query, params);
+    return rows[0];
+  } catch (error) {
+    console.error('❌ Error in getGPSStats:', error);
+    throw error;
+  }
+};
+
+// Versão simplificada - apenas lista de DEV_EUIs
+export const getDeviceList = async () => {
+  const query = `
+    SELECT DISTINCT dev_eui
+    FROM device_gps_report_monitoring
+    ORDER BY dev_eui ASC
+  `;
+
+  try {
+    const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(query);
+    return rows.map((row) => row.dev_eui);
+  } catch (error) {
+    console.error('❌ Error in getDeviceList:', error);
     throw error;
   }
 };
