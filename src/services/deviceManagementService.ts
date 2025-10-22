@@ -1,6 +1,6 @@
 // src/services/deviceManagementService.ts
 import { xfinderdb_prod } from '../db/xfinderdb_prod'
-import { QueryResult, RowDataPacket } from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 
 
 // =====================================
@@ -244,7 +244,7 @@ interface GPSRecord extends RowDataPacket {
 /**
  * Q1: Posição atual do dispositivo
  */
-export const getCurrentDevicePosition = async (devEui: string) => {
+export const getCurrentDevicePosition = async (devEui: string, companyId: string) => {
   const [rows] = await xfinderdb_prod.query<DevicePosition[]>(`
     SELECT 
       dev_eui,
@@ -263,10 +263,10 @@ export const getCurrentDevicePosition = async (devEui: string) => {
         battery_level,
         ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
       FROM device_gps_report_monitoring
-      WHERE dev_eui = ?
+      WHERE dev_eui = ? AND company_id = ?
     ) AS ranked
     WHERE row_num = 1
-  `, [devEui]);
+  `, [devEui, companyId]);
 
   return rows[0] || null;
 };
@@ -274,7 +274,7 @@ export const getCurrentDevicePosition = async (devEui: string) => {
 /**
  * Q2: Rota do dispositivo nas últimas 24 horas
  */
-export const getDeviceRoute24h = async (devEui: string) => {
+export const getDeviceRoute24h = async (devEui: string, companyId: string) => {
   const [rows] = await xfinderdb_prod.query<DeviceRoute[]>(`
     SELECT 
       timestamp,
@@ -285,11 +285,11 @@ export const getDeviceRoute24h = async (devEui: string) => {
       heading,
       distance_from_last_position_m
     FROM device_gps_report_monitoring
-    WHERE dev_eui = ?
+    WHERE dev_eui = ? AND company_id = ?
       AND timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND is_valid_gps = 1
     ORDER BY timestamp ASC
-  `, [devEui]);
+  `, [devEui, companyId]);
 
   return rows;
 };
@@ -297,9 +297,9 @@ export const getDeviceRoute24h = async (devEui: string) => {
 /**
  * Q3: Dispositivos em movimento vs estáticos
  */
-export const getDevicesByMotionState = async () => {
+export const getDevicesByMotionState = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<DevicePosition[]>(`
-    SELECT 
+    SELECT
       dev_eui,
       customer_name,
       dynamic_motion_state,
@@ -308,6 +308,7 @@ export const getDevicesByMotionState = async () => {
     FROM (
       SELECT 
         dev_eui,
+        device_gps_report_monitoring.company_id,
         customer_name,
         dynamic_motion_state,
         timestamp,
@@ -315,9 +316,9 @@ export const getDevicesByMotionState = async () => {
         ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
       FROM device_gps_report_monitoring
     ) AS ranked
-    WHERE row_num = 1
+    WHERE row_num = 1 and ranked.company_id = ?
     ORDER BY dynamic_motion_state, customer_name
-  `);
+  `, [companyId]);
 
   return rows;
 };
@@ -325,7 +326,7 @@ export const getDevicesByMotionState = async () => {
 /**
  * Q4: Dispositivos com bateria baixa (< 20%)
  */
-export const getLowBatteryDevices = async () => {
+export const getLowBatteryDevices = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<LowBatteryDevice[]>(`
     SELECT 
       dev_eui,
@@ -346,13 +347,14 @@ export const getLowBatteryDevices = async () => {
         battery_status,
         gps_latitude,
         gps_longitude,
+        device_gps_report_monitoring.company_id, 
         ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
       FROM device_gps_report_monitoring
     ) AS ranked
-    WHERE row_num = 1
+    WHERE row_num = 1 and ranked.company_id = ?
       AND battery_level < 20
     ORDER BY battery_level ASC
-  `);
+  `, [companyId]);
 
   return rows;
 };
@@ -360,9 +362,9 @@ export const getLowBatteryDevices = async () => {
 /**
  * Q5: Dispositivos offline (sem posição por 24h+)
  */
-export const getOfflineDevices = async () => {
+export const getOfflineDevices = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<OfflineDevice[]>(`
-    SELECT 
+        SELECT 
       dev_eui,
       customer_name,
       timestamp AS last_position,
@@ -374,13 +376,14 @@ export const getOfflineDevices = async () => {
         customer_name,
         timestamp,
         battery_level,
+        device_gps_report_monitoring.company_id,
         ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
       FROM device_gps_report_monitoring
     ) AS ranked
-    WHERE row_num = 1
+    WHERE row_num = 1 and ranked.company_id = ?
       AND timestamp < DATE_SUB(NOW(), INTERVAL 24 HOUR)
     ORDER BY timestamp ASC
-  `);
+  `, [companyId]);
 
   return rows;
 };
@@ -388,7 +391,7 @@ export const getOfflineDevices = async () => {
 /**
  * Q6: Qualidade de sinal por gateway
  */
-export const getGatewaySignalQuality = async () => {
+export const getGatewaySignalQuality = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<GatewaySignal[]>(`
     SELECT 
       gateway_name,
@@ -400,9 +403,10 @@ export const getGatewaySignalQuality = async () => {
     FROM device_gps_report_monitoring
     WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND gateway_name IS NOT NULL
+      AND company_id = ?
     GROUP BY gateway_name
     ORDER BY report_count DESC
-  `);
+  `, [companyId]);
 
   return rows;
 };
@@ -410,20 +414,26 @@ export const getGatewaySignalQuality = async () => {
 /**
  * Q7: Dispositivos ativos por cliente/domínio
  */
-export const getCustomerActivity = async () => {
+export const getCustomerActivity = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<CustomerActivity[]>(`
-    SELECT 
+    SELECT
       customer_name,
       domain_name,
       COUNT(DISTINCT dev_eui) AS total_devices,
       COUNT(*) AS total_reports,
       AVG(battery_level) AS avg_battery,
       MAX(timestamp) AS last_activity
-    FROM device_gps_report_monitoring
-    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-    GROUP BY customer_name, domain_name
-    ORDER BY total_devices DESC
-  `);
+    FROM
+      device_gps_report_monitoring
+    WHERE
+      timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      AND device_gps_report_monitoring.company_id = ?
+    GROUP BY
+      customer_name,
+      domain_name
+    ORDER BY
+      total_devices DESC
+  `, [companyId]);
 
   return rows;
 };
@@ -435,41 +445,45 @@ export const getCustomerActivity = async () => {
 /**
  * Q8: Alertas SOS ativos
  */
-export const getActiveSOSAlerts = async () => {
+export const getActiveSOSAlerts = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<SOSAlert[]>(`
-    SELECT 
+    SELECT
       a.dev_eui,
       a.customer_name,
       a.event_timestamp AS sos_start_time,
-      CAST(COALESCE(a.gps_latitude, gps.gps_latitude) AS DECIMAL(10,8)) AS gps_latitude,
-      CAST(COALESCE(a.gps_longitude, gps.gps_longitude) AS DECIMAL(11,8)) AS gps_longitude,
+      CAST(COALESCE(a.gps_latitude, gps.gps_latitude) AS DECIMAL(10, 8)) AS gps_latitude,
+      CAST(COALESCE(a.gps_longitude, gps.gps_longitude) AS DECIMAL(11, 8)) AS gps_longitude,
       COALESCE(a.battery_level, gps.battery_level) AS battery_level,
-      TIMESTAMPDIFF(MINUTE, a.event_timestamp, NOW()) AS minutes_elapsed
-    FROM device_events_management a
+      TIMESTAMPDIFF(MINUTE,
+      a.event_timestamp,
+      NOW()) AS minutes_elapsed
+    FROM
+      device_events_management a
     LEFT JOIN (
-      SELECT 
+      SELECT
         dev_eui,
         gps_latitude,
         gps_longitude,
         battery_level,
-        ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
-      FROM device_gps_report_monitoring
-      WHERE gps_latitude IS NOT NULL 
-        AND gps_longitude IS NOT NULL
+        ROW_NUMBER() OVER (PARTITION BY dev_eui
+      ORDER BY
+        timestamp DESC) AS row_num
+      FROM
+        device_gps_report_monitoring
+      WHERE
+        device_gps_report_monitoring.gps_latitude IS NOT NULL
+        AND device_gps_report_monitoring.gps_longitude IS NOT NULL
         AND is_valid_gps = 1
-    ) gps ON a.dev_eui = gps.dev_eui AND gps.row_num = 1
-    WHERE a.event_type = 'SOS_MODE_START'
+        ) gps ON
+      a.dev_eui = gps.dev_eui
+      AND gps.row_num = 1
+    WHERE
+      a.event_type = 'SOS_MODE_START'
       AND a.is_valid_event = 1
-      AND NOT EXISTS (
-        SELECT 1 
-        FROM device_events_management b 
-        WHERE b.dev_eui = a.dev_eui 
-          AND b.event_type = 'SOS_MODE_END'
-          AND b.event_timestamp > a.event_timestamp
-          AND b.is_valid_event = 1
-      )
-    ORDER BY a.event_timestamp DESC
-  `);
+      and a.company_id = ?
+    ORDER BY
+      a.event_timestamp DESC
+  `, [companyId]);
 
   return rows;
 };
@@ -477,18 +491,23 @@ export const getActiveSOSAlerts = async () => {
 /**
  * Q9: Eventos SOS nas últimas 24h
  */
-export const getSOSEvents24h = async () => {
+export const getSOSEvents24h = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<EventSummary[]>(`
-    SELECT 
+    SELECT
       COUNT(*) AS total_sos_events,
       COUNT(DISTINCT dev_eui) AS unique_devices,
       event_type
-    FROM device_events_management
-    WHERE (event_type = 'SOS_MODE_START' OR event_type = 'SOS_MODE_END')
+    FROM
+      device_events_management
+    WHERE
+      (event_type = 'SOS_MODE_START'
+        OR event_type = 'SOS_MODE_END')
       AND event_timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND is_valid_event = 1
-    GROUP BY event_type
-  `);
+      AND device_events_management.company_id = ?
+    GROUP BY
+      event_type
+  `, [companyId]);
 
   return rows;
 };
@@ -496,21 +515,25 @@ export const getSOSEvents24h = async () => {
 /**
  * Q10: Transições movimento → estático hoje
  */
-export const getMotionToStaticToday = async () => {
+export const getMotionToStaticToday = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<MotionEvent[]>(`
-    SELECT 
+    SELECT
       dev_eui,
       customer_name,
       event_timestamp,
       dynamic_motion_state,
       battery_level,
       temperature
-    FROM device_events_management
-    WHERE event_type = 'MOTION_END'
+    FROM
+      device_events_management
+    WHERE
+      event_type = 'MOTION_END'
       AND event_timestamp >= CURDATE()
       AND is_valid_event = 1
-    ORDER BY event_timestamp DESC
-  `);
+      AND device_events_management.company_id = ?
+    ORDER BY
+      event_timestamp DESC
+  `, [companyId]);
 
   return rows;
 };
@@ -539,19 +562,24 @@ export const getDuplicateEventRate = async () => {
 /**
  * Q12: Tipos de eventos mais comuns
  */
-export const getMostCommonEventTypes = async () => {
+export const getMostCommonEventTypes = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<EventTypeStats[]>(`
-    SELECT 
+    SELECT
       event_type,
       COUNT(*) AS total,
       SUM(CASE WHEN is_valid_event = 1 THEN 1 ELSE 0 END) AS valid_events,
       SUM(CASE WHEN is_valid_event = 0 THEN 1 ELSE 0 END) AS duplicate_events,
       COUNT(DISTINCT dev_eui) AS unique_devices
-    FROM device_events_management
-    WHERE event_timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-    GROUP BY event_type
-    ORDER BY total DESC
-  `);
+    FROM
+      device_events_management
+    WHERE
+      event_timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      AND device_events_management.company_id = ?
+    GROUP BY
+      event_type
+    ORDER BY
+      total DESC
+  `, [companyId]);
 
   return rows;
 };
@@ -586,7 +614,7 @@ export const getGeofenceViolations = async (limit: number = 100) => {
 /**
  * Q15: Configuração atual do dispositivo
  */
-export const getCurrentDeviceConfig = async (devEui: string) => {
+export const getCurrentDeviceConfig = async (devEui: string, companyId: string) => {
   const [rows] = await xfinderdb_prod.query<DeviceConfig[]>(`
     SELECT 
       dev_eui,
@@ -600,10 +628,10 @@ export const getCurrentDeviceConfig = async (devEui: string) => {
       battery_level,
       temperature
     FROM device_configuration_management
-    WHERE dev_eui = ?
+    WHERE dev_eui = ? AND company_id = ?
     ORDER BY config_timestamp DESC
     LIMIT 1
-  `, [devEui]);
+  `, [devEui, companyId]);
 
   return rows[0] || null;
 };
@@ -654,21 +682,24 @@ export const getTrackingModeDistribution = async () => {
 /**
  * Q26: Device uptime (última hora)
  */
-export const getDeviceUptime = async () => {
+export const getDeviceUptime = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<DeviceUptime[]>(`
-    SELECT 
+    SELECT
       COUNT(DISTINCT CASE 
-        WHEN timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR) 
-        THEN dev_eui 
-      END) AS devices_online,
+            WHEN timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR) 
+            THEN dev_eui 
+          END) AS devices_online,
       COUNT(DISTINCT dev_eui) AS total_devices,
       ROUND((COUNT(DISTINCT CASE 
-        WHEN timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR) 
-        THEN dev_eui 
-      END) / COUNT(DISTINCT dev_eui)) * 100, 2) AS uptime_percentage
-    FROM device_gps_report_monitoring
-    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-  `);
+            WHEN timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR) 
+            THEN dev_eui 
+          END) / COUNT(DISTINCT dev_eui)) * 100, 2) AS uptime_percentage
+    FROM
+      device_gps_report_monitoring
+    WHERE
+      timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      and device_gps_report_monitoring.company_id = ?
+  `, [companyId]);
 
   return rows[0] || null;
 };
@@ -676,15 +707,18 @@ export const getDeviceUptime = async () => {
 /**
  * Q27: Taxa de sucesso do GPS
  */
-export const getGPSSuccessRate = async () => {
+export const getGPSSuccessRate = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<GPSSuccessRate[]>(`
-    SELECT 
+    SELECT
       COUNT(*) AS total_reports,
       SUM(CASE WHEN is_valid_gps = 1 THEN 1 ELSE 0 END) AS valid_gps_reports,
       ROUND((SUM(CASE WHEN is_valid_gps = 1 THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) AS success_rate_percent
-    FROM device_gps_report_monitoring
-    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-  `);
+    FROM
+      device_gps_report_monitoring
+    WHERE
+      timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      AND device_gps_report_monitoring.company_id = ?
+  `, [companyId]);
 
   return rows[0] || null;
 };
@@ -692,24 +726,32 @@ export const getGPSSuccessRate = async () => {
 /**
  * Q29: Resumo da saúde da bateria
  */
-export const getBatteryHealthSummary = async () => {
+export const getBatteryHealthSummary = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<BatteryHealth[]>(`
-    SELECT 
+    SELECT
       COUNT(DISTINCT dev_eui) AS total_devices,
       SUM(CASE WHEN battery_level >= 30 THEN 1 ELSE 0 END) AS healthy_devices,
       SUM(CASE WHEN battery_level BETWEEN 20 AND 29 THEN 1 ELSE 0 END) AS warning_devices,
       SUM(CASE WHEN battery_level < 20 THEN 1 ELSE 0 END) AS critical_devices,
       ROUND((SUM(CASE WHEN battery_level >= 30 THEN 1 ELSE 0 END) / COUNT(DISTINCT dev_eui)) * 100, 2) AS health_percentage
-    FROM (
-      SELECT 
+    FROM
+      (
+      SELECT
         dev_eui,
         battery_level,
-        ROW_NUMBER() OVER (PARTITION BY dev_eui ORDER BY timestamp DESC) AS row_num
-      FROM device_gps_report_monitoring
-      WHERE battery_level IS NOT NULL
-    ) AS ranked
-    WHERE row_num = 1
-  `);
+        ROW_NUMBER() OVER (PARTITION BY dev_eui
+      ORDER BY
+        timestamp DESC) AS row_num,
+        device_gps_report_monitoring.company_id 
+      FROM
+        device_gps_report_monitoring
+      WHERE
+        battery_level IS NOT NULL
+        ) AS ranked
+    WHERE
+      row_num = 1
+        AND ranked.company_id = ?
+  `, [companyId]);
 
   return rows[0] || null;
 };
@@ -717,40 +759,50 @@ export const getBatteryHealthSummary = async () => {
 /**
  * Q30: Distribuição de precisão de posição
  */
-export const getPositionAccuracyDistribution = async () => {
+export const getPositionAccuracyDistribution = async (companyId: string) => {
   const [rows] = await xfinderdb_prod.query<AccuracyDistribution[]>(`
-    SELECT 
-      CASE 
+    SELECT
+      CASE
         WHEN gps_accuracy <= 10 THEN 'Excellent (<10m)'
         WHEN gps_accuracy <= 30 THEN 'Good (10-30m)'
         WHEN gps_accuracy <= 50 THEN 'Fair (30-50m)'
         ELSE 'Poor (>50m)'
       END AS accuracy_range,
       COUNT(*) AS report_count,
-      ROUND((COUNT(*) / (SELECT COUNT(*) FROM device_gps_report_monitoring 
-                         WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR) 
-                         AND gps_accuracy IS NOT NULL)) * 100, 2) AS percentage
-    FROM device_gps_report_monitoring
-    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      ROUND((COUNT(*) / (SELECT COUNT(*) FROM device_gps_report_monitoring WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND gps_accuracy IS NOT NULL)) * 100, 2) AS percentage
+    FROM
+      device_gps_report_monitoring
+    WHERE
+      timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
       AND gps_accuracy IS NOT NULL
-    GROUP BY accuracy_range
-    ORDER BY MIN(gps_accuracy)
-  `);
+      AND device_gps_report_monitoring.company_id = ?
+    GROUP BY
+      accuracy_range
+    ORDER BY
+      MIN(gps_accuracy)
+  `, [companyId]);
 
   return rows;
 };
 
 // * Retorna dados brutos da tabela device_gps_report_monitoring*/
-export const getGPSReportsRaw = async (params: PaginationParams): Promise<PaginatedResponse<RowDataPacket>> => {
+export const getGPSReportsRaw = async (params: PaginationParams & { companyId: string }): Promise<PaginatedResponse<RowDataPacket>> => {
+  const { companyId, ...paginationParams } = params;
+
   const page = params.page || 1;
   const limit = params.limit || 50;
   const offset = (page - 1) * limit;
   const sortBy = params.sortBy || 'timestamp';
   const sortOrder = params.sortOrder || 'DESC';
 
-  // Build WHERE clause
-  let whereClause = '1=1';
-  const queryParams: any[] = [];
+
+  // // Build WHERE clause
+  // let whereClause = '1=1';
+  // const queryParams: any[] = [];
+
+   // Build WHERE clause
+  let whereClause = 'company_id = ?';
+  const queryParams: any[] = [companyId];
 
   if (params.filters) {
     if (params.filters.dev_eui) {
@@ -814,9 +866,11 @@ export const getGPSReportsRaw = async (params: PaginationParams): Promise<Pagina
  * Retorna dados brutos da tabela device_events_management
  */
 
-export const getEventsManagementRaw = async (params: any): Promise<PaginatedResponse<RowDataPacket>> => {
+export const getEventsManagementRaw = async (params: any & {companyId: string}): Promise<PaginatedResponse<RowDataPacket>> => {
   console.log('🔍 PARAMS RECEBIDOS NO BACKEND (RAW):', params);
   
+  const { companyId, ...paginationParams } = params;
+
   const page = Number(params.page) || 1;
   const limit = Number(params.limit) || 50;
   const offset = (page - 1) * limit;
@@ -825,8 +879,12 @@ export const getEventsManagementRaw = async (params: any): Promise<PaginatedResp
   const sortBy = validSortColumns.includes(params.sortBy || '') ? params.sortBy : 'id';
   const sortOrder = params.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-  let whereClause = '1=1';
-  const queryParams: any[] = [];
+  // let whereClause = '1=1';
+  // const queryParams: any[] = [];
+
+  // 🎯 INCLUIR company_id NO WHERE CLAUSE
+  let whereClause = 'company_id = ?';
+  const queryParams: any[] = [companyId];
 
   // 🎯 CORREÇÃO: Buscar column_filters DENTRO de filters
   if (params.filters?.column_filters) {
@@ -955,15 +1013,22 @@ export const getEventsManagementRaw = async (params: any): Promise<PaginatedResp
 /**
  * Retorna dados brutos da tabela device_scanning_monitoring
  */
-export const getScanningMonitoringRaw = async (params: PaginationParams): Promise<PaginatedResponse<RowDataPacket>> => {
+export const getScanningMonitoringRaw = async (params: PaginationParams & {companyId: string}): Promise<PaginatedResponse<RowDataPacket>> => {
+  
+  const { companyId, ...paginationParams } = params;
+  
   const page = params.page || 1;
   const limit = params.limit || 50;
   const offset = (page - 1) * limit;
   const sortBy = params.sortBy || 'timestamp';
   const sortOrder = params.sortOrder || 'DESC';
 
-  let whereClause = '1=1';
-  const queryParams: any[] = [];
+  // let whereClause = '1=1';
+  // const queryParams: any[] = [];
+
+  // 🎯 INCLUIR company_id NO WHERE CLAUSE
+  let whereClause = 'company_id = ?';
+  const queryParams: any[] = [companyId];
 
   if (params.filters) {
     if (params.filters.dev_eui) {
@@ -1018,7 +1083,11 @@ export const getScanningMonitoringRaw = async (params: PaginationParams): Promis
  */
 export const getConfigurationManagementRaw = async (
   params: PaginationParams
+  & {companyId: string}
 ): Promise<PaginatedResponse<RowDataPacket>> => {
+
+   // Extrair companyId dos params
+  const { companyId, ...paginationParams } = params;
 
   const page = params.page || 1;
   const limit = params.limit || 50;
@@ -1047,8 +1116,13 @@ export const getConfigurationManagementRaw = async (
       ? params.sortOrder.toUpperCase()
       : 'DESC';
 
-  let whereClause = '1=1';
-  const queryParams: any[] = [];
+  // let whereClause = '1=1';
+  // const queryParams: any[] = [];
+
+  
+  // 🎯 INCLUIR company_id NO WHERE CLAUSE
+  let whereClause = 'company_id = ?';
+  const queryParams: any[] = [companyId];
 
   if (params.filters) {
     if (params.filters.dev_eui) {
@@ -1108,7 +1182,11 @@ export const getConfigurationManagementRaw = async (
  */
 export const getGPSErrorManagementRaw = async (
   params: PaginationParams
+  & {companyId: string}
 ): Promise<PaginatedResponse<RowDataPacket>> => {
+
+  // Extrair companyId dos params
+  const { companyId, ...paginationParams } = params;
 
   const page = params.page || 1;
   const limit = params.limit || 50;
@@ -1135,8 +1213,12 @@ export const getGPSErrorManagementRaw = async (
       ? params.sortOrder.toUpperCase()
       : 'DESC';
 
-  let whereClause = '1=1';
-  const queryParams: any[] = [];
+  // let whereClause = '1=1';
+  // const queryParams: any[] = [];
+
+  // 🎯 INCLUIR company_id NO WHERE CLAUSE
+  let whereClause = 'company_id = ?';
+  const queryParams: any[] = [companyId];
 
   if (params.filters) {
     if (params.filters.dev_eui) {
@@ -1188,16 +1270,17 @@ export const getGPSErrorManagementRaw = async (
 
 
 export const getHeartbeatsManagementRaw = async ({
+  companyId,
   page,
   limit,
   sortBy = 'heartbeat_timestamp',
   sortOrder = 'DESC',
   filters = {}
-}: GetDataParams) => {
+}: GetDataParams & {companyId: string}) => {
   const offset = (page - 1) * limit;
   
-  let query = 'SELECT * FROM device_heartbeat WHERE 1=1';
-  const params: any[] = [];
+  let query = 'SELECT * FROM device_heartbeat WHERE company_id = ?';
+  const params: any[] = [companyId];
 
   // Aplicar filtros específicos
   if (filters.dev_eui) {
@@ -1267,20 +1350,21 @@ export const getHeartbeatsManagementRaw = async ({
 
 
 export const getScannedBeaconsManagementRaw = async ({
+  companyId,
   page,
   limit,
   sortBy = 'dev_eui',
   sortOrder = 'DESC',
   filters = {}
-}: GetDataParams) => {
+}: GetDataParams & {companyId: string}) => {
   // Validação prévia
   if (!page || page < 1) page = 1;
   if (!limit || limit < 1) limit = 50;
   
   const offset = (page - 1) * limit;
   
-  let query = 'SELECT * FROM device_scanned_beacons_list WHERE 1=1';
-  const params: any[] = [];
+  let query = 'SELECT * FROM device_scanned_beacons_list WHERE company_id = ?';
+  const params: any[] = [companyId];
 
   // Aplicar filtros específicos
   if (filters.dev_eui) {
@@ -1363,12 +1447,13 @@ export const getScannedBeaconsManagementRaw = async ({
 
 
 export const getGPSRouteManagementRaw = async ({
+  companyId,
   page,
   limit,
   sortBy = 'timestamp',
   sortOrder = 'DESC',
   filters = {}
-}: GetDataParams) => {
+}: GetDataParams & {companyId: string}) => {
   // Validação prévia
   if (!page || page < 1) page = 1;
   if (!limit || limit < 1) limit = 50;
@@ -1383,9 +1468,9 @@ export const getGPSRouteManagementRaw = async ({
         gps_longitude,
         gps_accuracy
       FROM device_gps_report_monitoring 
-      WHERE 1=1
+      WHERE company_id = ?
   `;
-  const params: any[] = [];
+  const params: any[] = [companyId];
 
 
   
@@ -1952,6 +2037,7 @@ export const getGPSRouteManagementRaw = async ({
 
 
 export const getGPSData = async (params: {
+  companyId: string;
   page: number;
   limit: number;
   sortBy: string;
@@ -1959,13 +2045,16 @@ export const getGPSData = async (params: {
   filters: any;
   latestOnly?: boolean;
 }) => {
-  const { page, limit, sortBy, sortOrder, filters, latestOnly = false } = params;
+  const { companyId, page, limit, sortBy, sortOrder, filters, latestOnly = false } = params;
   
-  const queryParams: any[] = [];
+  const queryParams: any[] = [companyId];
   let paramIndex = 0;
 
-  // Construir cláusulas WHERE para filtros
-  let whereClause = '';
+  // // Construir cláusulas WHERE para filtros
+  // let whereClause = '';
+
+    // Construir cláusulas WHERE para filtros
+  let whereClause = ' AND company_id = ?'; // 🎯 Já inclui o company_id
   
   // Filtro dev_eui
   if (filters.dev_eui) {
@@ -2112,7 +2201,7 @@ export const getGPSData = async (params: {
 
 
 
-export const getGPSStats = async (filters: GPSFilters = {}) => {
+export const getGPSStats = async (companyId: string, filters: GPSFilters = {}) => {
   let query = `
     SELECT 
       COUNT(*) as total_records,
@@ -2123,10 +2212,13 @@ export const getGPSStats = async (filters: GPSFilters = {}) => {
       MIN(gps_accuracy) as min_accuracy,
       MAX(gps_accuracy) as max_accuracy
     FROM device_gps_report_monitoring 
-    WHERE 1=1
+    WHERE company_id = ?
   `;
 
-  const params: any[] = [];
+
+
+  // const params: any[] = [];
+   const params: any[] = [companyId]; // 🎯 CompanyId como primeiro parâmetro
 
   // Aplicar os mesmos filtros
   if (filters.dev_eui) {
@@ -2160,15 +2252,16 @@ export const getGPSStats = async (filters: GPSFilters = {}) => {
 };
 
 // Versão simplificada - apenas lista de DEV_EUIs
-export const getDeviceList = async () => {
+export const getDeviceList = async (companyId: string) => {
   const query = `
     SELECT DISTINCT dev_eui
     FROM device_gps_report_monitoring
+    WHERE company_id = ?
     ORDER BY dev_eui ASC
   `;
 
   try {
-    const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(query);
+    const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(query, [companyId]);
     return rows.map((row) => row.dev_eui);
   } catch (error) {
     console.error('❌ Error in getDeviceList:', error);
@@ -2189,6 +2282,7 @@ export const getDeviceList = async () => {
 export const exportTableData = async (
   tableName: string,
   format: 'json' | 'csv',
+  companyId: string,
   filters?: Record<string, any>
 ): Promise<any> => {
   const validTables = [
@@ -2203,9 +2297,14 @@ export const exportTableData = async (
     throw new Error('Invalid table name');
   }
 
-  // Build WHERE clause
-  let whereClause = '1=1';
-  const queryParams: any[] = [];
+  // // Build WHERE clause
+  // let whereClause = '1=1';
+  // const queryParams: any[] = [];
+
+   // Build WHERE clause
+  let whereClause = 'company_id = ?'; // 🎯 Filtro por company_id
+  const queryParams: any[] = [companyId];
+
 
   if (filters) {
     if (filters.dev_eui) {

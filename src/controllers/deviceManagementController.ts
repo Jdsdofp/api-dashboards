@@ -40,13 +40,13 @@ export interface GPSDataResponse {
 
 export const getCurrentPosition = async (req: Request, res: Response) => {
   try {
-    const { devEui } = req.params;
+    const { devEui, companyId } = req.params;
     
     if (!devEui) {
       return res.status(400).json({ error: 'Missing devEui parameter' });
     }
 
-    const data = await deviceService.getCurrentDevicePosition(devEui);
+    const data = await deviceService.getCurrentDevicePosition(devEui, companyId);
     
     if (!data) {
       return res.status(404).json({ message: 'Device not found or no position data available' });
@@ -64,13 +64,13 @@ export const getCurrentPosition = async (req: Request, res: Response) => {
 
 export const getDeviceRoute = async (req: Request, res: Response) => {
   try {
-    const { devEui } = req.params;
+    const { devEui, companyId } = req.params;
     
-    if (!devEui) {
-      return res.status(400).json({ error: 'Missing devEui parameter' });
+    if (!devEui || !companyId) {
+      return res.status(400).json({ error: 'Missing devEui or companyId parameter' });
     }
 
-    const data = await deviceService.getDeviceRoute24h(devEui);
+    const data = await deviceService.getDeviceRoute24h(devEui, companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching device route:', error);
@@ -83,7 +83,13 @@ export const getDeviceRoute = async (req: Request, res: Response) => {
 
 export const getMotionState = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getDevicesByMotionState();
+        const { companyId } = req.params;
+    
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getDevicesByMotionState(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching motion states:', error);
@@ -96,7 +102,13 @@ export const getMotionState = async (req: Request, res: Response) => {
 
 export const getLowBattery = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getLowBatteryDevices();
+    const { companyId } = req.params;
+    
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getLowBatteryDevices(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching low battery devices:', error);
@@ -109,7 +121,14 @@ export const getLowBattery = async (req: Request, res: Response) => {
 
 export const getOfflineDevices = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getOfflineDevices();
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getOfflineDevices(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching offline devices:', error);
@@ -122,7 +141,14 @@ export const getOfflineDevices = async (req: Request, res: Response) => {
 
 export const getGatewayQuality = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getGatewaySignalQuality();
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getGatewaySignalQuality(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching gateway quality:', error);
@@ -135,7 +161,13 @@ export const getGatewayQuality = async (req: Request, res: Response) => {
 
 export const getCustomerStats = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getCustomerActivity();
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getCustomerActivity(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching customer stats:', error);
@@ -152,7 +184,13 @@ export const getCustomerStats = async (req: Request, res: Response) => {
 
 export const getActiveSOS = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getActiveSOSAlerts();
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getActiveSOSAlerts(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching active SOS alerts:', error);
@@ -165,7 +203,13 @@ export const getActiveSOS = async (req: Request, res: Response) => {
 
 export const getSOSEvents = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getSOSEvents24h();
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getSOSEvents24h(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching SOS events:', error);
@@ -178,7 +222,13 @@ export const getSOSEvents = async (req: Request, res: Response) => {
 
 export const getMotionTransitions = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getMotionToStaticToday();
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getMotionToStaticToday(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching motion transitions:', error);
@@ -204,7 +254,13 @@ export const getDuplicateEvents = async (req: Request, res: Response) => {
 
 export const getEventTypes = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getMostCommonEventTypes();
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getMostCommonEventTypes(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching event types:', error);
@@ -235,13 +291,13 @@ export const getGeofenceAlerts = async (req: Request, res: Response) => {
 
 export const getDeviceConfig = async (req: Request, res: Response) => {
   try {
-    const { devEui } = req.params;
+    const { devEui, companyId } = req.params;
     
-    if (!devEui) {
-      return res.status(400).json({ error: 'Missing devEui parameter' });
+    if (!devEui || !companyId) {
+      return res.status(400).json({ error: 'Missing devEui or companyID parameter' });
     }
 
-    const data = await deviceService.getCurrentDeviceConfig(devEui);
+    const data = await deviceService.getCurrentDeviceConfig(devEui, companyId);
     
     if (!data) {
       return res.status(404).json({ message: 'Device configuration not found' });
@@ -296,7 +352,14 @@ export const getTrackingModes = async (req: Request, res: Response) => {
 
 export const getDeviceUptimeKPI = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getDeviceUptime();
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getDeviceUptime(companyId);
     
     if (!data) {
       return res.status(404).json({ message: 'No uptime data available' });
@@ -314,7 +377,14 @@ export const getDeviceUptimeKPI = async (req: Request, res: Response) => {
 
 export const getGPSSuccessKPI = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getGPSSuccessRate();
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getGPSSuccessRate(companyId);
     
     if (!data) {
       return res.status(404).json({ message: 'No GPS success rate data available' });
@@ -332,7 +402,14 @@ export const getGPSSuccessKPI = async (req: Request, res: Response) => {
 
 export const getBatteryHealthKPI = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getBatteryHealthSummary();
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getBatteryHealthSummary(companyId);
     
     if (!data) {
       return res.status(404).json({ message: 'No battery health data available' });
@@ -350,7 +427,13 @@ export const getBatteryHealthKPI = async (req: Request, res: Response) => {
 
 export const getAccuracyDistributionKPI = async (req: Request, res: Response) => {
   try {
-    const data = await deviceService.getPositionAccuracyDistribution();
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const data = await deviceService.getPositionAccuracyDistribution(companyId);
     res.json(data);
   } catch (error) {
     console.error('Error fetching accuracy distribution:', error);
@@ -369,7 +452,15 @@ export const getAccuracyDistributionKPI = async (req: Request, res: Response) =>
  * Endpoint consolidado que retorna todos os KPIs principais de uma vez
  */
 export const getDashboardOverview = async (req: Request, res: Response) => {
+
   try {
+
+    const { companyId } = req.params;
+    
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const [
       uptime,
       gpsSuccess,
@@ -379,13 +470,13 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
       lowBattery,
       offline
     ] = await Promise.all([
-      deviceService.getDeviceUptime(),
-      deviceService.getGPSSuccessRate(),
-      deviceService.getBatteryHealthSummary(),
-      deviceService.getPositionAccuracyDistribution(),
-      deviceService.getActiveSOSAlerts(),
-      deviceService.getLowBatteryDevices(),
-      deviceService.getOfflineDevices()
+      deviceService.getDeviceUptime(companyId),
+      deviceService.getGPSSuccessRate(companyId),
+      deviceService.getBatteryHealthSummary(companyId),
+      deviceService.getPositionAccuracyDistribution(companyId),
+      deviceService.getActiveSOSAlerts(companyId),
+      deviceService.getLowBatteryDevices(companyId),
+      deviceService.getOfflineDevices(companyId)
     ]);
 
     res.json({
@@ -421,6 +512,12 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
 
 export const getRawGPSReports = async (req: Request, res: Response) => {
   try {
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -439,7 +536,7 @@ export const getRawGPSReports = async (req: Request, res: Response) => {
 
     console.log('🔍 Controller - filters:', filters); // Debug
 
-    const data = await deviceService.getGPSReportsRaw({ page, limit, sortBy, sortOrder, filters });
+    const data = await deviceService.getGPSReportsRaw({companyId, page, limit, sortBy, sortOrder, filters });
     res.json(data);
   } catch (error) {
     console.error('Error fetching raw GPS reports:', error);
@@ -452,6 +549,12 @@ export const getRawGPSReports = async (req: Request, res: Response) => {
 
 export const getRawEvents = async (req: Request, res: Response) => {
   try {
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -470,7 +573,7 @@ export const getRawEvents = async (req: Request, res: Response) => {
 
     console.log('🔍 Events Controller - filters:', filters);
 
-    const data = await deviceService.getEventsManagementRaw({ page, limit, sortBy, sortOrder, filters });
+    const data = await deviceService.getEventsManagementRaw({companyId, page, limit, sortBy, sortOrder, filters });
     res.json(data);
   } catch (error) {
     console.error('Error fetching raw events:', error);
@@ -483,6 +586,13 @@ export const getRawEvents = async (req: Request, res: Response) => {
 
 export const getRawScanningMonitoring = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -494,7 +604,7 @@ export const getRawScanningMonitoring = async (req: Request, res: Response) => {
     if (req.query.start_date) filters.start_date = req.query.start_date;
     if (req.query.end_date) filters.end_date = req.query.end_date;
 
-    const data = await deviceService.getScanningMonitoringRaw({ page, limit, sortBy, sortOrder, filters });
+    const data = await deviceService.getScanningMonitoringRaw({ companyId, page, limit, sortBy, sortOrder, filters });
     res.json(data);
   } catch (error) {
     console.error('Error fetching raw scanning data:', error);
@@ -507,6 +617,13 @@ export const getRawScanningMonitoring = async (req: Request, res: Response) => {
 
 export const getRawConfigurationManagement = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -519,7 +636,7 @@ export const getRawConfigurationManagement = async (req: Request, res: Response)
     if (req.query.start_date) filters.start_date = req.query.start_date;
     if (req.query.end_date) filters.end_date = req.query.end_date;
 
-    const data = await deviceService.getConfigurationManagementRaw({ page, limit, sortBy, sortOrder, filters });
+    const data = await deviceService.getConfigurationManagementRaw({ companyId, page, limit, sortBy, sortOrder, filters });
     res.json(data);
   } catch (error) {
     console.error('Error fetching raw configuration data:', error);
@@ -532,6 +649,14 @@ export const getRawConfigurationManagement = async (req: Request, res: Response)
 
 export const getRawGPSErrorManagement = async (req: Request, res: Response) => {
   try {
+
+    console.log('Rota chamada ')
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -544,7 +669,8 @@ export const getRawGPSErrorManagement = async (req: Request, res: Response) => {
     if (req.query.start_date) filters.start_date = req.query.start_date;
     if (req.query.end_date) filters.end_date = req.query.end_date;
 
-    const data = await deviceService.getGPSErrorManagementRaw({ page, limit, sortBy, sortOrder, filters });
+    const data = await deviceService.getGPSErrorManagementRaw({companyId, page, limit, sortBy, sortOrder, filters });
+    console.log('Dados retornardos: ', data?.data)
     res.json(data);
   } catch (error) {
     console.error('Error fetching raw GPS error data:', error);
@@ -557,6 +683,13 @@ export const getRawGPSErrorManagement = async (req: Request, res: Response) => {
 
 export const exportTableData = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const { table, format } = req.params;
     
     const filters: Record<string, any> = {};
@@ -565,7 +698,7 @@ export const exportTableData = async (req: Request, res: Response) => {
     if (req.query.end_date) filters.end_date = req.query.end_date;
     if (req.query.customer_name) filters.customer_name = req.query.customer_name;
 
-    const data = await deviceService.exportTableData(table, format as 'json' | 'csv', filters);
+    const data = await deviceService.exportTableData(table, format as 'json' | 'csv', companyId, filters);
 
     if (format === 'csv') {
       res.setHeader('Content-Type', 'text/csv');
@@ -585,6 +718,13 @@ export const exportTableData = async (req: Request, res: Response) => {
 
 export const getRawHeartbeats = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -603,7 +743,8 @@ export const getRawHeartbeats = async (req: Request, res: Response) => {
     
     console.log('🔍 Heartbeats Controller - filters:', filters);
     
-    const data = await deviceService.getHeartbeatsManagementRaw({ 
+    const data = await deviceService.getHeartbeatsManagementRaw({
+      companyId, 
       page, 
       limit, 
       sortBy, 
@@ -623,6 +764,13 @@ export const getRawHeartbeats = async (req: Request, res: Response) => {
 
 export const getRawScannedBeacons = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -642,7 +790,8 @@ export const getRawScannedBeacons = async (req: Request, res: Response) => {
     
     console.log('🔍 Scanned Beacons Controller - filters:', filters);
     
-    const data = await deviceService.getScannedBeaconsManagementRaw({ 
+    const data = await deviceService.getScannedBeaconsManagementRaw({
+      companyId, 
       page, 
       limit, 
       sortBy, 
@@ -662,6 +811,14 @@ export const getRawScannedBeacons = async (req: Request, res: Response) => {
 
 export const getRawGPSRoute = async (req: Request, res: Response) => {
   try {
+    
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const sortBy = req.query.sortBy as string;
@@ -682,7 +839,8 @@ export const getRawGPSRoute = async (req: Request, res: Response) => {
     
     console.log('🔍 GPS Route Controller - filters:', filters);
     
-    const data = await deviceService.getGPSRouteManagementRaw({ 
+    const data = await deviceService.getGPSRouteManagementRaw({
+      companyId, 
       page, 
       limit, 
       sortBy, 
@@ -830,6 +988,14 @@ export const getRawGPSRoute = async (req: Request, res: Response) => {
 
 export const getGPSData = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
     const sortBy = (req.query.sortBy as string) || 'timestamp';
@@ -869,6 +1035,7 @@ export const getGPSData = async (req: Request, res: Response) => {
     console.log('🔍 Latest Only:', latestOnly);
 
     const result = await deviceService.getGPSData({
+      companyId,
       page,
       limit,
       sortBy,
@@ -892,6 +1059,13 @@ export const getGPSData = async (req: Request, res: Response) => {
 
 export const getGPSStats = async (req: Request, res: Response) => {
   try {
+
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     const filters: any = {};
 
     if (req.query.dev_eui) {
@@ -906,7 +1080,7 @@ export const getGPSStats = async (req: Request, res: Response) => {
     if (req.query.start_date) filters.start_date = req.query.start_date;
     if (req.query.end_date) filters.end_date = req.query.end_date;
 
-    const stats = await deviceService.getGPSStats(filters);
+    const stats = await deviceService.getGPSStats(companyId, filters);
 
     res.json({
       success: true,
@@ -926,9 +1100,15 @@ export const getGPSStats = async (req: Request, res: Response) => {
 // Endpoint simplificado - apenas lista de DEV_EUIs
 export const getDeviceList = async (req: Request, res: Response) => {
   try {
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
     console.log('📋 Fetching device list...');
 
-    const devices = await deviceService.getDeviceList();
+    const devices = await deviceService.getDeviceList(companyId);
 
     res.json({
       success: true,
