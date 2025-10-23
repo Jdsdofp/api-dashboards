@@ -1978,10 +1978,14 @@ export const getGPSStats = async (companyId: string, filters: GPSFilters = {}) =
 // Versão simplificada - apenas lista de DEV_EUIs
 export const getDeviceList = async (companyId: string) => {
   const query = `
-    SELECT DISTINCT dev_eui
-    FROM device_gps_report_monitoring
-    WHERE company_id = ?
-    ORDER BY dev_eui ASC
+    SELECT
+      DISTINCT person_code
+    FROM
+      echart_people_location
+    WHERE
+      company_id = ?
+    ORDER BY
+      person_code ASC
   `;
 
   try {
