@@ -1580,132 +1580,8 @@ export const getGPSRouteManagementRaw = async ({
 };
 
 
-// export const getGPSData = async ({
-//   page = 1,
-//   limit = 50,
-//   sortBy = 'timestamp',
-//   sortOrder = 'DESC',
-//   filters = {}
-// }: GPSQueryParams) => {
-//   // Validação e sanitização
-//   const validPage = Math.max(1, page);
-//   const validLimit = Math.min(Math.max(1, limit), 1000); // Máximo 1000 registros
-//   const offset = (validPage - 1) * validLimit;
-
-//   // Validar sortBy para prevenir SQL injection
-//   const allowedSortColumns = ['timestamp', 'dev_eui', 'gps_accuracy'];
-//   const validSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'timestamp';
-//   const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
-
-//   // Construir query base
-//   let query = `
-//     SELECT 
-//       dev_eui,
-//       timestamp,
-//       gps_latitude,
-//       gps_longitude,
-//       gps_accuracy
-//     FROM device_gps_report_monitoring 
-//     WHERE 1=1
-//   `;
-
-//   const params: any[] = [];
-
-//   // Filtro por dev_eui (único ou múltiplo)
-//   if (filters.dev_eui) {
-//     if (Array.isArray(filters.dev_eui) && filters.dev_eui.length > 0) {
-//       // Múltiplos dev_eui
-//       const placeholders = filters.dev_eui.map(() => '?').join(',');
-//       query += ` AND dev_eui IN (${placeholders})`;
-//       params.push(...filters.dev_eui);
-//     } else if (typeof filters.dev_eui === 'string' && filters.dev_eui.trim()) {
-//       // Único dev_eui
-//       query += ` AND dev_eui = ?`;
-//       params.push(filters.dev_eui.trim());
-//     }
-//   }
-
-//   // Filtro por período (data inicial)
-//   if (filters.start_date) {
-//     query += ` AND timestamp >= ?`;
-//     params.push(filters.start_date);
-//   }
-
-//   // Filtro por período (data final)
-//   if (filters.end_date) {
-//     query += ` AND timestamp <= ?`;
-//     params.push(filters.end_date);
-//   }
-
-//   // Filtrar apenas GPS válido
-//   if (filters.valid_gps_only) {
-//     query += ` AND gps_latitude IS NOT NULL 
-//                AND gps_longitude IS NOT NULL
-//                AND gps_latitude BETWEEN -90 AND 90
-//                AND gps_longitude BETWEEN -180 AND 180`;
-//   }
-
-//   // Filtro por accuracy máxima
-//   if (filters.max_accuracy !== undefined && filters.max_accuracy > 0) {
-//     query += ` AND gps_accuracy <= ?`;
-//     params.push(filters.max_accuracy);
-//   }
-
-//   // Filtro por accuracy mínima
-//   if (filters.min_accuracy !== undefined && filters.min_accuracy >= 0) {
-//     query += ` AND gps_accuracy >= ?`;
-//     params.push(filters.min_accuracy);
-//   }
-
-//   try {
-//     // Query para contar total de registros
-//     const countQuery = query.replace(
-//       /SELECT[\s\S]*?FROM/i,
-//       'SELECT COUNT(*) as total FROM'
-//     );
-
-//     const [countResult] = await xfinderdb_prod.query<RowDataPacket[]>(
-//       countQuery,
-//       params
-//     );
-//     const total = countResult[0]?.total || 0;
-
-//     // Adicionar ordenação e paginação
-//     query += ` ORDER BY ${validSortBy} ${validSortOrder}`;
-//     query += ` LIMIT ? OFFSET ?`;
-//     const queryParams = [...params, validLimit, offset];
-
-//     console.log('📍 GPS Query:', query);
-//     console.log('📍 Params:', queryParams);
-
-//     // Executar query principal
-//     const [rows] = await xfinderdb_prod.query<GPSRecord[]>(query, queryParams);
-
-//     return {
-//       success: true,
-//       data: rows,
-//       pagination: {
-//         current_page: validPage,
-//         per_page: validLimit,
-//         total_records: total,
-//         total_pages: Math.ceil(total / validLimit),
-//         has_next: validPage < Math.ceil(total / validLimit),
-//         has_prev: validPage > 1
-//       },
-//       filters_applied: filters
-//     };
-//   } catch (error) {
-//     console.error('❌ Error in getGPSData:', error);
-//     throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-//   }
-// };
-
-
-// Função auxiliar para obter estatísticas do GPS
-
-
-
 // export const getGPSData = async (params: {
+//   companyId: string;
 //   page: number;
 //   limit: number;
 //   sortBy: string;
@@ -1713,190 +1589,16 @@ export const getGPSRouteManagementRaw = async ({
 //   filters: any;
 //   latestOnly?: boolean;
 // }) => {
-//   const { page, limit, sortBy, sortOrder, filters, latestOnly = false } = params;
+//   const { companyId, page, limit, sortBy, sortOrder, filters, latestOnly = false } = params;
   
-//   let query = '';
-//   let countQuery = '';
-//   const queryParams: any[] = [];
+//   const queryParams: any[] = [companyId];
 //   let paramIndex = 0;
 
-//   if (latestOnly) {
-//     // Query para pegar apenas o registro mais recente de cada dev_eui
-//     query = `
-//       SELECT 
-//         dgr.id,
-//         dgr.dev_eui,
-//         dgr.timestamp,
-//         dgr.gps_latitude,
-//         dgr.gps_longitude,
-//         dgr.gps_accuracy
-//       FROM device_gps_report_monitoring dgr
-//       INNER JOIN (
-//         SELECT 
-//           dev_eui, 
-//           MAX(timestamp) as max_timestamp
-//         FROM device_gps_report_monitoring
-//         WHERE 1=1
-//     `;
+//   // // Construir cláusulas WHERE para filtros
+//   // let whereClause = '';
 
-//     countQuery = `
-//       SELECT COUNT(DISTINCT dev_eui) as total
-//       FROM device_gps_report_monitoring
-//       WHERE 1=1
-//     `;
-//   } else {
-//     // Query normal para todos os registros
-//     query = `
-//       SELECT
-//         id,
-//         dev_eui,
-//         timestamp,
-//         gps_latitude,
-//         gps_longitude,
-//         gps_accuracy
-//       FROM device_gps_report_monitoring
-//       WHERE 1=1
-//     `;
-
-//     countQuery = `
-//       SELECT COUNT(*) as total
-//       FROM device_gps_report_monitoring
-//       WHERE 1=1
-//     `;
-//   }
-
-//   // Construir cláusulas WHERE para filtros
-//   let whereClause = '';
-  
-//   // Filtro dev_eui
-//   if (filters.dev_eui) {
-//     if (Array.isArray(filters.dev_eui) && filters.dev_eui.length > 0) {
-//       const placeholders = filters.dev_eui.map(() => '?').join(',');
-//       whereClause += ` AND dev_eui IN (${placeholders})`;
-//       queryParams.push(...filters.dev_eui);
-//     } else if (typeof filters.dev_eui === 'string') {
-//       whereClause += ` AND dev_eui = ?`;
-//       queryParams.push(filters.dev_eui);
-//     }
-//   }
-
-//   // Filtro de data
-//   if (filters.start_date) {
-//     whereClause += ` AND timestamp >= ?`;
-//     queryParams.push(filters.start_date);
-//   }
-
-//   if (filters.end_date) {
-//     whereClause += ` AND timestamp <= ?`;
-//     queryParams.push(filters.end_date);
-//   }
-
-//   // Filtros GPS
-//   if (filters.valid_gps_only) {
-//     whereClause += ` AND gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL`;
-//   }
-
-//   if (filters.max_accuracy !== undefined) {
-//     whereClause += ` AND gps_accuracy <= ?`;
-//     queryParams.push(filters.max_accuracy);
-//   }
-
-//   if (filters.min_accuracy !== undefined) {
-//     whereClause += ` AND gps_accuracy >= ?`;
-//     queryParams.push(filters.min_accuracy);
-//   }
-
-//   // Aplicar filtros na query
-//   if (latestOnly) {
-//     // Adicionar WHERE clause na subquery
-//     query += whereClause;
-//     query += `
-//         GROUP BY dev_eui
-//       ) latest ON dgr.dev_eui = latest.dev_eui 
-//                AND dgr.timestamp = latest.max_timestamp
-//       WHERE 1=1
-//     `;
-    
-//     // Para latestOnly, alguns filtros precisam ser aplicados novamente na query externa
-//     if (filters.valid_gps_only) {
-//       query += ` AND dgr.gps_latitude IS NOT NULL AND dgr.gps_longitude IS NOT NULL`;
-//     }
-//     if (filters.max_accuracy !== undefined) {
-//       query += ` AND dgr.gps_accuracy <= ?`;
-//       queryParams.push(filters.max_accuracy);
-//     }
-//     if (filters.min_accuracy !== undefined) {
-//       query += ` AND dgr.gps_accuracy >= ?`;
-//       queryParams.push(filters.min_accuracy);
-//     }
-//   } else {
-//     query += whereClause;
-//   }
-
-//   // Adicionar WHERE clause na countQuery
-//   countQuery += whereClause;
-
-//   // Ordenação
-//   const validSortColumns = ['id', 'dev_eui', 'timestamp', 'gps_latitude', 'gps_longitude', 'gps_accuracy'];
-//   const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'timestamp';
-//   const safeSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
-  
-//   if (latestOnly) {
-//     query += ` ORDER BY dgr.${safeSortBy} ${safeSortOrder}`;
-//   } else {
-//     query += ` ORDER BY ${safeSortBy} ${safeSortOrder}`;
-//   }
-
-//   // Paginação
-//   const offset = (page - 1) * limit;
-//   query += ` LIMIT ? OFFSET ?`;
-//   queryParams.push(limit, offset);
-
-//   console.log('📊 Executing query:', query);
-//   console.log('📊 Query params:', queryParams);
-
-//   try {
-//     // Executar query principal
-//     const [rows] = await xfinderdb_prod.query(query, queryParams);
-
-//     // Executar query de contagem (usar os mesmos parâmetros, mas sem LIMIT/OFFSET)
-//     const countParams = queryParams.slice(0, -2); // Remove LIMIT e OFFSET
-//     const [countResult]: any = await xfinderdb_prod.query(countQuery, countParams);
-//     const totalCount = countResult[0].total;
-
-//     return {
-//       success: true,
-//       data: rows,
-//       pagination: {
-//         page,
-//         limit,
-//         total: totalCount,
-//         totalPages: Math.ceil(totalCount / limit)
-//       }
-//     };
-//   } catch (error) {
-//     console.error('❌ Database query error:', error);
-//     throw error;
-//   }
-// };
-
-
-
-// export const getGPSData = async (params: {
-//   page: number;
-//   limit: number;
-//   sortBy: string;
-//   sortOrder: 'ASC' | 'DESC';
-//   filters: any;
-//   latestOnly?: boolean;
-// }) => {
-//   const { page, limit, sortBy, sortOrder, filters, latestOnly = false } = params;
-  
-//   const queryParams: any[] = [];
-//   let paramIndex = 0;
-
-//   // Construir cláusulas WHERE para filtros
-//   let whereClause = '';
+//     // Construir cláusulas WHERE para filtros
+//   let whereClause = ' AND dgr.company_id = ?'; // 🎯 Já inclui o company_id
   
 //   // Filtro dev_eui
 //   if (filters.dev_eui) {
@@ -1940,7 +1642,7 @@ export const getGPSRouteManagementRaw = async ({
 //   let countQuery = '';
 
 //   if (latestOnly) {
-//     // Query otimizada para últimos registros
+//     // Query otimizada para últimos registros com JOIN
 //     query = `
 //       SELECT 
 //         dgr.id,
@@ -1948,7 +1650,9 @@ export const getGPSRouteManagementRaw = async ({
 //         dgr.timestamp,
 //         dgr.gps_latitude,
 //         dgr.gps_longitude,
-//         dgr.gps_accuracy
+//         dgr.gps_accuracy,
+//         ss.Item_Name,
+//         ss.Image_hash
 //       FROM device_gps_report_monitoring dgr
 //       INNER JOIN (
 //         SELECT 
@@ -1960,6 +1664,7 @@ export const getGPSRouteManagementRaw = async ({
 //         GROUP BY dev_eui
 //       ) latest ON dgr.dev_eui = latest.dev_eui 
 //                AND dgr.timestamp = latest.max_timestamp
+//       LEFT JOIN sensorview_sensordata ss ON dgr.dev_eui = ss.Device_ID
 //       WHERE 1=1
 //     `;
 
@@ -1973,34 +1678,37 @@ export const getGPSRouteManagementRaw = async ({
 //       ) as distinct_devices
 //     `;
 //   } else {
-//     // Query normal para todos os registros
+//     // Query normal para todos os registros com JOIN
 //     query = `
 //       SELECT
-//         id,
-//         dev_eui,
-//         timestamp,
-//         gps_latitude,
-//         gps_longitude,
-//         gps_accuracy
-//       FROM device_gps_report_monitoring
+//         dgr.id,
+//         dgr.dev_eui,
+//         dgr.timestamp,
+//         dgr.gps_latitude,
+//         dgr.gps_longitude,
+//         dgr.gps_accuracy,
+//         ss.Item_Name,
+//         ss.Image_hash
+//       FROM device_gps_report_monitoring dgr
+//       LEFT JOIN sensorview_sensordata ss ON dgr.dev_eui = ss.Device_ID
 //       WHERE 1=1
 //       ${whereClause}
 //     `;
 
 //     countQuery = `
 //       SELECT COUNT(*) as total
-//       FROM device_gps_report_monitoring
+//       FROM device_gps_report_monitoring dgr
 //       WHERE 1=1
 //       ${whereClause}
 //     `;
 //   }
 
 //   // Ordenação
-//   const validSortColumns = ['id', 'dev_eui', 'timestamp', 'gps_latitude', 'gps_longitude', 'gps_accuracy'];
+//   const validSortColumns = ['id', 'dev_eui', 'timestamp', 'gps_latitude', 'gps_longitude', 'gps_accuracy', 'Item_Name'];
 //   const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'timestamp';
 //   const safeSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
   
-//   query += ` ORDER BY ${latestOnly ? 'dgr.' : ''}${safeSortBy} ${safeSortOrder}`;
+//   query += ` ORDER BY ${safeSortBy} ${safeSortOrder}`;
 
 //   // Paginação
 //   const offset = (page - 1) * limit;
@@ -2050,11 +1758,8 @@ export const getGPSData = async (params: {
   const queryParams: any[] = [companyId];
   let paramIndex = 0;
 
-  // // Construir cláusulas WHERE para filtros
-  // let whereClause = '';
-
-    // Construir cláusulas WHERE para filtros
-  let whereClause = ' AND dgr.company_id = ?'; // 🎯 Já inclui o company_id
+  // Construir cláusulas WHERE para filtros
+  let whereClause = ' AND company_id = ?'; // ✅ Remove o prefixo dgr.
   
   // Filtro dev_eui
   if (filters.dev_eui) {
@@ -2098,7 +1803,7 @@ export const getGPSData = async (params: {
   let countQuery = '';
 
   if (latestOnly) {
-    // Query otimizada para últimos registros com JOIN
+    // Query otimizada para últimos registros com JOIN - CORRIGIDA
     query = `
       SELECT 
         dgr.id,
@@ -2116,12 +1821,13 @@ export const getGPSData = async (params: {
           MAX(timestamp) as max_timestamp
         FROM device_gps_report_monitoring
         WHERE 1=1
-        ${whereClause}
+        ${whereClause.replace(/dgr\./g, '')}  // ✅ Remove prefixos dgr da subquery
         GROUP BY dev_eui
       ) latest ON dgr.dev_eui = latest.dev_eui 
                AND dgr.timestamp = latest.max_timestamp
       LEFT JOIN sensorview_sensordata ss ON dgr.dev_eui = ss.Device_ID
       WHERE 1=1
+      ${whereClause.replace(/company_id/g, 'dgr.company_id')}  // ✅ Adiciona prefixo apenas onde necessário
     `;
 
     countQuery = `
@@ -2130,11 +1836,11 @@ export const getGPSData = async (params: {
         SELECT DISTINCT dev_eui
         FROM device_gps_report_monitoring
         WHERE 1=1
-        ${whereClause}
+        ${whereClause.replace(/dgr\./g, '')}  // ✅ Remove prefixos dgr
       ) as distinct_devices
     `;
   } else {
-    // Query normal para todos os registros com JOIN
+    // Query normal para todos os registros com JOIN - CORRIGIDA
     query = `
       SELECT
         dgr.id,
@@ -2148,14 +1854,14 @@ export const getGPSData = async (params: {
       FROM device_gps_report_monitoring dgr
       LEFT JOIN sensorview_sensordata ss ON dgr.dev_eui = ss.Device_ID
       WHERE 1=1
-      ${whereClause}
+      ${whereClause.replace(/company_id/g, 'dgr.company_id')}  // ✅ Adiciona prefixo
     `;
 
     countQuery = `
       SELECT COUNT(*) as total
       FROM device_gps_report_monitoring dgr
       WHERE 1=1
-      ${whereClause}
+      ${whereClause.replace(/company_id/g, 'dgr.company_id')}  // ✅ Adiciona prefixo
     `;
   }
 
@@ -2198,7 +1904,6 @@ export const getGPSData = async (params: {
     throw error;
   }
 };
-
 
 
 export const getGPSStats = async (companyId: string, filters: GPSFilters = {}) => {
