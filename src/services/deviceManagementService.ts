@@ -1840,10 +1840,12 @@ export const getGPSData = async (params: {
     countQuery = `
       SELECT COUNT(*) as total
       FROM (
-        SELECT DISTINCT dev_eui
-        FROM device_gps_report_monitoring
-        WHERE 1=1
-        ${subqueryWhere}
+          SELECT
+            DISTINCT person_code
+          FROM
+            echart_people_location
+          WHERE 1=1
+            ${subqueryWhere}
       ) as distinct_devices
     `;
     
