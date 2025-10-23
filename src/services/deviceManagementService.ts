@@ -2054,7 +2054,7 @@ export const getGPSData = async (params: {
   // let whereClause = '';
 
     // Construir cláusulas WHERE para filtros
-  let whereClause = ' AND company_id = ?'; // 🎯 Já inclui o company_id
+  let whereClause = ' AND dgr.company_id = ?'; // 🎯 Já inclui o company_id
   
   // Filtro dev_eui
   if (filters.dev_eui) {
