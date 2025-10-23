@@ -1598,7 +1598,7 @@ export const getGPSRouteManagementRaw = async ({
 //   // let whereClause = '';
 
 //     // Construir cláusulas WHERE para filtros
-//   let whereClause = ' AND dgr.company_id = ?'; // 🎯 Já inclui o company_id
+//   let whereClause = ' AND company_id = ?'; // 🎯 Já inclui o company_id
   
 //   // Filtro dev_eui
 //   if (filters.dev_eui) {
@@ -1755,55 +1755,63 @@ export const getGPSData = async (params: {
 }) => {
   const { companyId, page, limit, sortBy, sortOrder, filters, latestOnly = false } = params;
   
-  const queryParams: any[] = [companyId];
-  let paramIndex = 0;
-
-  // Construir cláusulas WHERE para filtros
-  let whereClause = ' AND company_id = ?'; // ✅ Remove o prefixo dgr.
+  const queryParams: any[] = [];
   
-  // Filtro dev_eui
-  if (filters.dev_eui) {
-    if (Array.isArray(filters.dev_eui) && filters.dev_eui.length > 0) {
-      const placeholders = filters.dev_eui.map(() => '?').join(',');
-      whereClause += ` AND dev_eui IN (${placeholders})`;
-      queryParams.push(...filters.dev_eui);
-    } else if (typeof filters.dev_eui === 'string') {
-      whereClause += ` AND dev_eui = ?`;
-      queryParams.push(filters.dev_eui);
+  // 🔧 CORREÇÃO: Construir whereClause de forma mais simples
+  const buildWhereClause = (useAlias: boolean = true) => {
+    const params: any[] = [companyId]; // Sempre começa com company_id
+    const prefix = useAlias ? 'dgr.' : '';
+    let clause = ` AND ${prefix}company_id = ?`;
+    
+    // Filtro dev_eui
+    if (filters.dev_eui) {
+      if (Array.isArray(filters.dev_eui) && filters.dev_eui.length > 0) {
+        const placeholders = filters.dev_eui.map(() => '?').join(',');
+        clause += ` AND ${prefix}dev_eui IN (${placeholders})`;
+        params.push(...filters.dev_eui);
+      } else if (typeof filters.dev_eui === 'string') {
+        clause += ` AND ${prefix}dev_eui = ?`;
+        params.push(filters.dev_eui);
+      }
     }
-  }
 
-  // Filtro de data
-  if (filters.start_date) {
-    whereClause += ` AND timestamp >= ?`;
-    queryParams.push(filters.start_date);
-  }
+    // Filtro de data
+    if (filters.start_date) {
+      clause += ` AND ${prefix}timestamp >= ?`;
+      params.push(filters.start_date);
+    }
 
-  if (filters.end_date) {
-    whereClause += ` AND timestamp <= ?`;
-    queryParams.push(filters.end_date);
-  }
+    if (filters.end_date) {
+      clause += ` AND ${prefix}timestamp <= ?`;
+      params.push(filters.end_date);
+    }
 
-  // Filtros GPS
-  if (filters.valid_gps_only) {
-    whereClause += ` AND gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL`;
-  }
+    // Filtros GPS
+    if (filters.valid_gps_only) {
+      clause += ` AND ${prefix}gps_latitude IS NOT NULL AND ${prefix}gps_longitude IS NOT NULL`;
+    }
 
-  if (filters.max_accuracy !== undefined) {
-    whereClause += ` AND gps_accuracy <= ?`;
-    queryParams.push(filters.max_accuracy);
-  }
+    if (filters.max_accuracy !== undefined) {
+      clause += ` AND ${prefix}gps_accuracy <= ?`;
+      params.push(filters.max_accuracy);
+    }
 
-  if (filters.min_accuracy !== undefined) {
-    whereClause += ` AND gps_accuracy >= ?`;
-    queryParams.push(filters.min_accuracy);
-  }
+    if (filters.min_accuracy !== undefined) {
+      clause += ` AND ${prefix}gps_accuracy >= ?`;
+      params.push(filters.min_accuracy);
+    }
+    
+    return { clause, params };
+  };
 
   let query = '';
   let countQuery = '';
 
   if (latestOnly) {
-    // Query otimizada para últimos registros com JOIN - CORRIGIDA
+    // 🔧 CORREÇÃO: Gerar whereClause SEM alias para a subconsulta
+    const { clause: subqueryWhere, params: subqueryParams } = buildWhereClause(false);
+    
+    // Query otimizada para últimos registros com JOIN
     query = `
       SELECT 
         dgr.id,
@@ -1821,13 +1829,12 @@ export const getGPSData = async (params: {
           MAX(timestamp) as max_timestamp
         FROM device_gps_report_monitoring
         WHERE 1=1
-        ${whereClause.replace(/dgr\./g, '')}  // ✅ Remove prefixos dgr da subquery
+        ${subqueryWhere}
         GROUP BY dev_eui
       ) latest ON dgr.dev_eui = latest.dev_eui 
                AND dgr.timestamp = latest.max_timestamp
       LEFT JOIN sensorview_sensordata ss ON dgr.dev_eui = ss.Device_ID
       WHERE 1=1
-      ${whereClause.replace(/company_id/g, 'dgr.company_id')}  // ✅ Adiciona prefixo apenas onde necessário
     `;
 
     countQuery = `
@@ -1836,11 +1843,17 @@ export const getGPSData = async (params: {
         SELECT DISTINCT dev_eui
         FROM device_gps_report_monitoring
         WHERE 1=1
-        ${whereClause.replace(/dgr\./g, '')}  // ✅ Remove prefixos dgr
+        ${subqueryWhere}
       ) as distinct_devices
     `;
+    
+    // 🔧 IMPORTANTE: Usar os mesmos parâmetros para ambas as queries
+    queryParams.push(...subqueryParams);
+    
   } else {
-    // Query normal para todos os registros com JOIN - CORRIGIDA
+    // Query normal para todos os registros com JOIN
+    const { clause: mainWhere, params: mainParams } = buildWhereClause(true);
+    
     query = `
       SELECT
         dgr.id,
@@ -1854,15 +1867,17 @@ export const getGPSData = async (params: {
       FROM device_gps_report_monitoring dgr
       LEFT JOIN sensorview_sensordata ss ON dgr.dev_eui = ss.Device_ID
       WHERE 1=1
-      ${whereClause.replace(/company_id/g, 'dgr.company_id')}  // ✅ Adiciona prefixo
+      ${mainWhere}
     `;
 
     countQuery = `
       SELECT COUNT(*) as total
       FROM device_gps_report_monitoring dgr
       WHERE 1=1
-      ${whereClause.replace(/company_id/g, 'dgr.company_id')}  // ✅ Adiciona prefixo
+      ${mainWhere}
     `;
+    
+    queryParams.push(...mainParams);
   }
 
   // Ordenação
@@ -1875,17 +1890,21 @@ export const getGPSData = async (params: {
   // Paginação
   const offset = (page - 1) * limit;
   query += ` LIMIT ? OFFSET ?`;
-  queryParams.push(limit, offset);
+  
+  // 🔧 Parâmetros finais para a query principal
+  const finalQueryParams = [...queryParams, limit, offset];
+  
+  // 🔧 Parâmetros para a count query (sem LIMIT e OFFSET)
+  const countParams = [...queryParams];
 
   console.log('📊 Executing query:', query);
-  console.log('📊 Query params:', queryParams);
+  console.log('📊 Query params:', finalQueryParams);
 
   try {
     // Executar query principal
-    const [rows] = await xfinderdb_prod.query(query, queryParams);
+    const [rows] = await xfinderdb_prod.query(query, finalQueryParams);
 
     // Executar query de contagem
-    const countParams = queryParams.slice(0, -2); // Remove LIMIT e OFFSET
     const [countResult]: any = await xfinderdb_prod.query(countQuery, countParams);
     const totalCount = countResult[0].total;
 
