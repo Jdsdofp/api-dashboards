@@ -1990,7 +1990,7 @@ export const getDeviceList = async (companyId: string) => {
 
   try {
     const [rows] = await xfinderdb_prod.query<RowDataPacket[]>(query, [companyId]);
-    return rows.map((row) => row.dev_eui);
+    return rows.map((row) => row.person_code);
   } catch (error) {
     console.error('❌ Error in getDeviceList:', error);
     throw error;
