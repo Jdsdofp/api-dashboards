@@ -1,6 +1,7 @@
 // src/controllers/deviceManagementController.ts
 import { Request, Response } from 'express';
 import * as deviceService from '../services/deviceManagementService';
+import * as alertService from '../services/alertManagementService';
 
 
 
@@ -451,42 +452,130 @@ export const getAccuracyDistributionKPI = async (req: Request, res: Response) =>
 /**
  * Endpoint consolidado que retorna todos os KPIs principais de uma vez
  */
-export const getDashboardOverview = async (req: Request, res: Response) => {
+// export const getDashboardOverview = async (req: Request, res: Response) => {
 
-  try {
+//   try {
 
-    const { companyId } = req.params;
+//     const { companyId } = req.params;
     
+//     if (!companyId) {
+//       return res.status(400).json({ error: 'Missing companyId parameter' });
+//     }
+
+//     const [
+//       uptime,
+//       gpsSuccess,
+//       batteryHealth,
+//       accuracyDist,
+//       activeSOS,
+//       lowBattery,
+//       offline
+//     ] = await Promise.all([
+//       deviceService.getDeviceUptime(companyId),
+//       deviceService.getGPSSuccessRate(companyId),
+//       deviceService.getBatteryHealthSummary(companyId),
+//       deviceService.getPositionAccuracyDistribution(companyId),
+//       deviceService.getActiveSOSAlerts(companyId),
+//       deviceService.getLowBatteryDevices(companyId),
+//       deviceService.getOfflineDevices(companyId)
+//     ]);
+
+//     res.json({
+//       kpis: {
+//         uptime,
+//         gps_success: gpsSuccess,
+//         battery_health: batteryHealth,
+//         accuracy_distribution: accuracyDist
+//       },
+//       alerts: {
+//         active_sos_count: activeSOS.length,
+//         active_sos_list: activeSOS,
+//         low_battery_count: lowBattery.length,
+//         low_battery_devices: lowBattery.slice(0, 10), // Top 10 críticos
+//         offline_count: offline.length,
+//         offline_devices: offline.slice(0, 10) // Top 10 offline há mais tempo
+//       },
+//       generated_at: new Date().toISOString()
+//     });
+//   } catch (error) {
+//     console.error('Error fetching dashboard overview:', error);
+//     res.status(500).json({ 
+//       error: 'Failed to fetch dashboard overview',
+//       message: error instanceof Error ? error.message : 'Unknown error'
+//     });
+//   }
+// };
+
+
+// =====================================
+// 🗄️ RAW DATA ENDPOINTS
+// =====================================
+
+
+
+/**
+ * 🆕 ENDPOINT CONSOLIDADO COMPLETO
+ * Retorna todos os KPIs principais + Sistema de Alertas de uma vez
+ */
+export const getDashboardOverview = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.params;
+   
     if (!companyId) {
       return res.status(400).json({ error: 'Missing companyId parameter' });
     }
 
+    // 🔥 Executar todas as queries em paralelo para máxima performance
     const [
+      // ===== KPIs Originais =====
       uptime,
       gpsSuccess,
       batteryHealth,
       accuracyDist,
       activeSOS,
       lowBattery,
-      offline
+      offline,
+      
+      // ===== 🆕 Sistema de Alertas =====
+      alertSummary,
+      activeAlerts,
+      alertsByDepartment,
+      alertsByZone,
+      multipleAlerts,
+      buttonComparison,
+      alarmComparison
     ] = await Promise.all([
+      // KPIs Originais
       deviceService.getDeviceUptime(companyId),
       deviceService.getGPSSuccessRate(companyId),
       deviceService.getBatteryHealthSummary(companyId),
       deviceService.getPositionAccuracyDistribution(companyId),
       deviceService.getActiveSOSAlerts(companyId),
       deviceService.getLowBatteryDevices(companyId),
-      deviceService.getOfflineDevices(companyId)
+      deviceService.getOfflineDevices(companyId),
+      
+      // Sistema de Alertas
+      alertService.getAlertSummary(companyId),
+      alertService.getAllActiveAlerts(companyId),
+      alertService.getAlertsByDepartment(companyId),
+      alertService.getAlertsByZone(companyId),
+      alertService.getPeopleWithMultipleAlerts(companyId),
+      alertService.getButtonComparison(companyId),
+      alertService.getAlarmComparison(companyId)
     ]);
 
+    // 🎯 Resposta consolidada
     res.json({
+      // ===== KPIs de Dispositivos (Original) =====
       kpis: {
         uptime,
         gps_success: gpsSuccess,
         battery_health: batteryHealth,
         accuracy_distribution: accuracyDist
       },
-      alerts: {
+
+      // ===== Alertas de Dispositivos (Original) =====
+      device_alerts: {
         active_sos_count: activeSOS.length,
         active_sos_list: activeSOS,
         low_battery_count: lowBattery.length,
@@ -494,21 +583,270 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
         offline_count: offline.length,
         offline_devices: offline.slice(0, 10) // Top 10 offline há mais tempo
       },
-      generated_at: new Date().toISOString()
+
+      // ===== 🆕 Sistema de Alertas de Pessoas =====
+      people_alerts: {
+        // Resumo geral
+        summary: alertSummary,
+        
+        // Alertas ativos (top 10 mais críticos)
+        active_alerts: activeAlerts.slice(0, 10),
+        active_alerts_count: activeAlerts.length,
+        
+        // Pessoas com múltiplos alertas (mais urgentes)
+        multiple_alerts: multipleAlerts.slice(0, 5),
+        
+        // Distribuições para gráficos
+        by_department: alertsByDepartment,
+        by_zone: alertsByZone,
+        
+        // Comparativos para gráficos
+        button_comparison: buttonComparison,
+        alarm_comparison: alarmComparison
+      },
+
+      // ===== Meta informações =====
+      generated_at: new Date().toISOString(),
+      company_id: companyId
     });
+
   } catch (error) {
-    console.error('Error fetching dashboard overview:', error);
-    res.status(500).json({ 
+    console.error('❌ Error fetching dashboard overview:', error);
+    res.status(500).json({
       error: 'Failed to fetch dashboard overview',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 };
 
+/**
+ * 🆕 ENDPOINT SIMPLIFICADO - Overview Rápido
+ * Versão mais leve para atualizações frequentes
+ */
+export const getDashboardOverviewLight = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.params;
+   
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
 
-// =====================================
-// 🗄️ RAW DATA ENDPOINTS
-// =====================================
+    const [
+      uptime,
+      activeSOS,
+      lowBattery,
+      offline,
+      alertSummary
+    ] = await Promise.all([
+      deviceService.getDeviceUptime(companyId),
+      deviceService.getActiveSOSAlerts(companyId),
+      deviceService.getLowBatteryDevices(companyId),
+      deviceService.getOfflineDevices(companyId),
+      alertService.getAlertSummary(companyId)
+    ]);
+
+    res.json({
+      // Métricas essenciais
+      summary: {
+        devices_online: uptime.devices_online,
+        devices_total: uptime.total_devices,
+        uptime_percentage: uptime.uptime_percentage,
+        
+        // Alertas críticos
+        critical_alerts: {
+          sos_active: activeSOS.length,
+          low_battery: lowBattery.length,
+          offline: offline.length,
+          
+          // Alertas de pessoas
+          highly_critical: alertSummary?.highly_critical || 0,
+          critical: alertSummary?.critical || 0,
+          total_people_alerts: alertSummary?.people_with_alerts || 0
+        }
+      },
+      updated_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching light overview:', error);
+    res.status(500).json({
+      error: 'Failed to fetch light overview',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * 🆕 ENDPOINT DETALHADO - Alertas Específicos de Pessoas
+ * Para quando precisar de dados completos do sistema de alertas
+ */
+export const getPeopleAlertsDetailed = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.params;
+   
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    // Query params para filtros opcionais
+    const {
+      department,
+      zone,
+      priority,
+      alarm1,
+      alarm2,
+      button1,
+      button2,
+      mandown
+    } = req.query;
+
+    // Construir filtros
+    const filters: any = {};
+    if (department) filters.department = department as string;
+    if (zone) filters.zone = zone as string;
+    if (priority) filters.priority = priority as 'HIGHLY_CRITICAL' | 'CRITICAL' | 'ALERT';
+    if (alarm1 === 'true') filters.alarm1 = true;
+    if (alarm2 === 'true') filters.alarm2 = true;
+    if (button1 === 'true') filters.button1 = true;
+    if (button2 === 'true') filters.button2 = true;
+    if (mandown === 'true') filters.mandown = true;
+
+    const [
+      alertSummary,
+      filteredAlerts,
+      alertsByDepartment,
+      alertsByZone,
+      multipleAlerts,
+      history24h
+    ] = await Promise.all([
+      alertService.getAlertSummary(companyId),
+      alertService.getPeopleWithAlerts(companyId, filters),
+      alertService.getAlertsByDepartment(companyId),
+      alertService.getAlertsByZone(companyId),
+      alertService.getPeopleWithMultipleAlerts(companyId),
+      alertService.getAlertHistory24h(companyId)
+    ]);
+
+    res.json({
+      summary: alertSummary,
+      filtered_alerts: {
+        data: filteredAlerts,
+        count: filteredAlerts.length,
+        filters_applied: filters
+      },
+      distributions: {
+        by_department: alertsByDepartment,
+        by_zone: alertsByZone
+      },
+      critical: {
+        multiple_alerts: multipleAlerts,
+        multiple_alerts_count: multipleAlerts.length
+      },
+      recent_changes: {
+        last_24h: history24h.slice(0, 20), // Últimas 20 mudanças
+        total_changes: history24h.length
+      },
+      generated_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching detailed people alerts:', error);
+    res.status(500).json({
+      error: 'Failed to fetch detailed people alerts',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * 🆕 ENDPOINT - Comparativos para Gráficos
+ */
+export const getAlertsComparison = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.params;
+   
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const [
+      buttonComparison,
+      alarmComparison,
+      alertsByDepartment,
+      alertsByZone
+    ] = await Promise.all([
+      alertService.getButtonComparison(companyId),
+      alertService.getAlarmComparison(companyId),
+      alertService.getAlertsByDepartment(companyId),
+      alertService.getAlertsByZone(companyId)
+    ]);
+
+    res.json({
+      buttons: buttonComparison,
+      alarms: alarmComparison,
+      by_department: alertsByDepartment,
+      by_zone: alertsByZone,
+      generated_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching alerts comparison:', error);
+    res.status(500).json({
+      error: 'Failed to fetch alerts comparison',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * 🆕 ENDPOINT - Critical Alerts Dashboard
+ * Apenas os alertas mais críticos para monitoramento em tempo real
+ */
+export const getCriticalAlertsDashboard = async (req: Request, res: Response) => {
+  try {
+    const { companyId } = req.params;
+   
+    if (!companyId) {
+      return res.status(400).json({ error: 'Missing companyId parameter' });
+    }
+
+    const [
+      activeSOS,
+      alertSummary,
+      highlyCritical,
+      multipleAlerts
+    ] = await Promise.all([
+      deviceService.getActiveSOSAlerts(companyId),
+      alertService.getAlertSummary(companyId),
+      alertService.getPeopleWithAlerts(companyId, { priority: 'HIGHLY_CRITICAL' }),
+      alertService.getPeopleWithMultipleAlerts(companyId)
+    ]);
+
+    res.json({
+      critical_count: {
+        sos_devices: activeSOS.length,
+        highly_critical_people: alertSummary?.highly_critical || 0,
+        multiple_alerts_people: multipleAlerts.length,
+        total_critical: activeSOS.length + (alertSummary?.highly_critical || 0)
+      },
+      sos_devices: activeSOS,
+      highly_critical_people: highlyCritical,
+      multiple_alerts_people: multipleAlerts,
+      requires_immediate_action: activeSOS.length > 0 || (alertSummary?.highly_critical || 0) > 0,
+      generated_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching critical alerts dashboard:', error);
+    res.status(500).json({
+      error: 'Failed to fetch critical alerts dashboard',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+
+
 
 export const getRawGPSReports = async (req: Request, res: Response) => {
   try {

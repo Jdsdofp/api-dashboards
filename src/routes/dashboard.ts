@@ -6,6 +6,8 @@ import { geoLocationMetrics } from '../controllers/geoLocationsMetricsContoller'
 
 // 🆕 Importar rotas de dispositivos
 import deviceRoutes from './devices';
+import alertRoutes from './alertRoutes';
+
 
 
 const router = Router();
@@ -21,6 +23,7 @@ router.get('/metrics/:companyId', geoLocationMetrics); // ✅ usa o controller q
 
 // ====== 🆕 Rotas de dispositivos IoT ======
 router.use('/devices', deviceRoutes);
+router.use('/alert', alertRoutes)
 
 //Minhas rotas necessarias
 
